@@ -1,0 +1,27 @@
+=== ORGANICLINK CV MODEL EVALUATION REPORT ===
+Architecture: EfficientNet-B0
+Dataset: Synthetic Bootstrap Produce Quality Dataset
+Overall Accuracy: 100.00%
+
+Per-Class Performance Metrics:
+ - FRESH:
+     Precision: 1.0000
+     Recall:    1.0000
+     F1 Score:  1.0000
+     Support:   60
+ - MINOR_DEFECT:
+     Precision: 1.0000
+     Recall:    1.0000
+     F1 Score:  1.0000
+     Support:   60
+ - MAJOR_DEFECT:
+     Precision: 1.0000
+     Recall:    1.0000
+     F1 Score:  1.0000
+     Support:   60
+
+Confusion Matrix (Rows: Actual, Cols: Predicted):
+Classes: ['fresh', 'minor_defect', 'major_defect']
+  [60, 0, 0]
+  [0, 60, 0]
+  [0, 0, 60]

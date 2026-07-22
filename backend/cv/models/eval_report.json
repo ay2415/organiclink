@@ -1,0 +1,44 @@
+{
+  "architecture": "EfficientNet-B0",
+  "dataset": "Synthetic Bootstrap Produce Quality Dataset",
+  "num_train_samples": 900,
+  "num_val_samples": 180,
+  "overall_accuracy": 1.0,
+  "class_metrics": {
+    "fresh": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 60
+    },
+    "minor_defect": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 60
+    },
+    "major_defect": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 60
+    }
+  },
+  "confusion_matrix": [
+    [
+      60,
+      0,
+      0
+    ],
+    [
+      0,
+      60,
+      0
+    ],
+    [
+      0,
+      0,
+      60
+    ]
+  ]
+}
