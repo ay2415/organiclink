@@ -133,13 +133,12 @@ class GradingInferenceEngine:
             
             if product == "milk" and v < 50:
                 product_mismatch = True 
-            elif product in ["tomato", "apple"] and (20 < h < 160):
+            elif product in ["tomato", "apple"] and (30 < h < 150):
                 product_mismatch = True 
-            elif product == "carrot" and (h < 10 or h > 30):
-                product_mismatch = True 
-            elif product in ["onion", "potato"] and (h < 16 or h > 40):
-                product_mismatch = True # Onion/Potato should be brown/yellow/amber (hue 16-40)
-            elif product == "cheese" and (h < 15 or h > 60):
+            
+            # Note: Onion, Potato, Carrot, and Cheese hue checks were too brittle 
+            # and overlapped significantly with the lighting of tomatoes.
+            # We bypass them for now to avoid false rejections of actual crops.
                 product_mismatch = True # Cheese should be yellow/white
             
             if product_mismatch:
