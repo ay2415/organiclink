@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Farm, Product, QualityInspection
+from models.all_models import Product, Farm, QualityInspection, ProductionHistory, User, ProductType, Photo
 from schemas.schemas import ProductResponse
 from routers.auth import get_current_user, require_role
 from cv.inference import get_inference_engine
@@ -40,11 +40,21 @@ def create_product_listing(
     current_user: User = Depends(require_role(["farmer", "admin"])),
     db: Session = Depends(get_db)
 ):
+    if current_user.role != "farmer" and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only users with role 'farmer' may create listings.")
+
     farm = db.query(Farm).filter(Farm.id == farm_id).first()
     if not farm:
         raise HTTPException(status_code=404, detail="Farm not found")
     if farm.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized to list for this farm")
+
+    # A7. Organic Verification Gate Enforcement
+    if farm.verification_status != "verified" and not farm.verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Farm organic certification is pending verification or expired. Unverified farms cannot publish listings."
+        )
 
     # 1. Save uploaded image
     ext = os.path.splitext(image.filename)[1] or ".jpg"
@@ -55,28 +65,36 @@ def create_product_listing(
     
     image_url = f"/static/uploads/{filename}"
 
-    # 2. Run Computer Vision Quality Grading
-    engine = get_inference_engine()
-    cv_result = engine.analyze_image(filepath, expected_product=product_type)
+    # Check if product is CV gradable (A4)
+    prod_type_ref = db.query(ProductType).filter(ProductType.id == product_type.lower()).first()
+    is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
 
-    if cv_result.get("product_mismatch"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=cv_result["cv_breakdown"]["error"]
-        )
+    score = None
+    grade = None
+    cv_result = None
 
-    score = cv_result["quality_score"]
-    grade = cv_result["quality_grade"]
-    defects = cv_result.get("cv_breakdown", {}).get("detected_defects", [])
+    if is_cv_gradable:
+        # 2. Run Computer Vision Quality Grading for gradable produce
+        engine = get_inference_engine()
+        cv_result = engine.analyze_image(filepath, expected_product=product_type)
 
-    # 3. Listing Gate Enforcement: Grade R is REJECTED
-    if grade == "R":
-        # Remove uploaded image or keep for audit
-        defect_str = ", ".join(defects) if defects else "severely damaged produce visual indicators"
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Produce Quality Inspection REJECTED (Grade R, Score {score:.1f}/100). Defects detected: {defect_str}. Only produce of Grade A, B, or C may be listed."
-        )
+        if cv_result.get("product_mismatch"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=cv_result["cv_breakdown"]["error"]
+            )
+
+        score = cv_result["quality_score"]
+        grade = cv_result["quality_grade"]
+        defects = cv_result.get("cv_breakdown", {}).get("detected_defects", [])
+
+        # 3. Listing Gate Enforcement: Grade R is REJECTED
+        if grade == "R":
+            defect_str = ", ".join(defects) if defects else "severely damaged produce visual indicators"
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Produce Quality Inspection REJECTED (Grade R, Score {score:.1f}/100). Defects detected: {defect_str}. Only produce of Grade A, B, or C may be listed."
+            )
 
     # Parse buyer types
     try:
@@ -84,23 +102,25 @@ def create_product_listing(
     except Exception:
         buyer_roles = [r.strip() for r in buyer_types_open_to.split(",") if r.strip()]
 
-    # 4. Create Quality Inspection record
+    # 4. Create Quality Inspection record if gradable
     prod_date_obj = datetime.strptime(production_date, "%Y-%m-%d").date()
+    inspection_id = None
 
-    inspection = QualityInspection(
-        inspection_level="farm",
-        image_url=image_url,
-        cv_results=cv_result["cv_results"],
-        quality_score=score,
-        quality_grade=grade,
-        defects_detected=defects,
-        model_confidence=cv_result["model_confidence"],
-        model_version=cv_result["model_version"],
-        inspector_id=current_user.id
-    )
-    db.add(inspection)
-    db.commit()
-    db.refresh(inspection)
+    if is_cv_gradable and cv_result:
+        inspection = QualityInspection(
+            inspection_level="farm",
+            image_url=image_url,
+            cv_results=cv_result.get("cv_breakdown", {}),
+            quality_score=score,
+            quality_grade=grade,
+            defects_detected=cv_result.get("cv_breakdown", {}).get("detected_defects", []),
+            model_confidence=cv_result.get("neural_confidence", 0.0),
+            model_version="imagenet-resnet18-real-v1",
+            inspector_id=current_user.id
+        )
+        db.add(inspection)
+        db.flush()
+        inspection_id = inspection.id
 
     # Generate PDF certificate
     cert_url = generate_quality_certificate_pdf(

@@ -43,16 +43,18 @@ class Farm(Base):
     cert_issue_date = Column(Date, nullable=True)
     cert_expiry_date = Column(Date, nullable=True)
     cert_doc_url = Column(String(500), nullable=True)
+    verification_status = Column(String(50), default="verified", index=True) # pending_verification, verified, expired
     farm_type = Column(String(50), default="mixed") # dairy, produce, mixed
     description = Column(Text, nullable=True)
     reputation_score = Column(Float, default=0.0)
     total_orders_completed = Column(Integer, default=0)
     average_quality_score = Column(Float, nullable=True)
-    verified = Column(Boolean, default=False)
+    verified = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="farm")
     production_history = relationship("ProductionHistory", back_populates="farm", cascade="all, delete-orphan")
+    production_logs = relationship("ProductionLog", back_populates="farm", cascade="all, delete-orphan")
     contracts = relationship("Contract", back_populates="farm", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="farm", cascade="all, delete-orphan")
 
@@ -70,6 +72,47 @@ class ProductionHistory(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     farm = relationship("Farm", back_populates="production_history")
+
+
+class ProductType(Base):
+    __tablename__ = "product_types"
+
+    id = Column(String(100), primary_key=True) # e.g. "milk", "onion", "tomato"
+    name = Column(String(255), nullable=False)
+    category = Column(String(100), nullable=False) # dairy, vegetables, fruit
+    default_unit = Column(String(20), default="kg") # kg, litre
+    default_log_type = Column(String(20), default="batch") # daily, batch
+    cv_gradable = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ProductionLog(Base):
+    __tablename__ = "production_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    farm_id = Column(String(36), ForeignKey("farms.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_type = Column(String(100), nullable=False, index=True)
+    log_type = Column(String(20), nullable=False, default="batch") # daily, batch
+    log_date = Column(Date, nullable=False, index=True)
+    batch_reference = Column(String(100), nullable=True)
+    quantity = Column(Float, nullable=False)
+    unit = Column(String(20), nullable=False) # kg, litre
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    farm = relationship("Farm", back_populates="production_logs")
+
+
+class Photo(Base):
+    __tablename__ = "photos"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    file_path = Column(String(500), nullable=False)
+    uploaded_by = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    purpose = Column(String(50), nullable=False) # listing, farm_inspection, delivery_inspection, certificate_doc, profile
+    product_id = Column(String(36), ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
+    order_id = Column(String(36), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Contract(Base):

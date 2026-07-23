@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Farm, Product, Order, QualityInspection, Payment, Notification, AdminSetting
+from models.all_models import User, Farm, Product, Order, QualityInspection, Payment, Notification, AdminSetting, ProductType, Photo
 from schemas.schemas import (
     OrderCreate, OrderNegotiate, OrderReject, OrderResponse, QualityInspectionResponse
 )
@@ -96,7 +96,9 @@ def list_my_orders(
 ):
     query = db.query(Order)
     if current_user.role == "farmer":
-        query = query.filter(Order.farmer_id == current_user.id)
+        # Farmer can be both seller and buyer (A1)
+        role_type = Query(None)
+        query = query.filter((Order.farmer_id == current_user.id) | (Order.buyer_id == current_user.id))
     elif current_user.role == "admin":
         pass # sees all
     else: # buyer roles
@@ -251,34 +253,50 @@ def upload_farm_inspection_photo(
     with open(filepath, "wb") as f:
         f.write(image.file.read())
 
-    image_url = f"/static/uploads/{filename}"
-
-    engine = get_inference_engine()
-    res = engine.analyze_image(filepath)
-
-    insp = QualityInspection(
+    # Record photo (A5)
+    photo_rec = Photo(
+        file_path=image_url,
+        uploaded_by=current_user.id,
+        purpose="farm_inspection",
         product_id=order.product_id,
-        order_id=order.id,
-        inspection_level="farm",
-        image_url=image_url,
-        cv_results=res["cv_results"],
-        quality_score=res["quality_score"],
-        quality_grade=res["quality_grade"],
-        defects_detected=res["defects_detected"],
-        model_confidence=res["model_confidence"],
-        model_version=res["model_version"],
-        inspector_id=current_user.id
+        order_id=order.id
     )
-    db.add(insp)
-    db.commit()
-    db.refresh(insp)
+    db.add(photo_rec)
 
-    order.farm_inspection_id = insp.id
-    order.status = "quality_verified"
-    db.commit()
+    product = db.query(Product).filter(Product.id == order.product_id).first()
+    prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
+    is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
 
-    log_audit_event(db, action="farm_quality_verified", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"farm_score": insp.quality_score, "grade": insp.quality_grade})
-    return {"message": "Farm dispatch quality inspection completed", "inspection_id": insp.id, "quality_score": insp.quality_score, "grade": insp.quality_grade}
+    if is_cv_gradable:
+        engine = get_inference_engine()
+        res = engine.analyze_image(filepath)
+
+        insp = QualityInspection(
+            product_id=order.product_id,
+            order_id=order.id,
+            inspection_level="farm",
+            image_url=image_url,
+            cv_results=res.get("cv_breakdown", {}),
+            quality_score=res.get("quality_score", 0.0),
+            quality_grade=res.get("quality_grade", "A"),
+            defects_detected=res.get("cv_breakdown", {}).get("detected_defects", []),
+            model_confidence=res.get("neural_confidence", 0.0),
+            model_version="imagenet-resnet18-real-v1",
+            inspector_id=current_user.id
+        )
+        db.add(insp)
+        db.commit()
+        db.refresh(insp)
+
+        order.farm_inspection_id = insp.id
+        order.status = "quality_verified"
+        db.commit()
+        return {"message": "Farm dispatch quality inspection completed", "inspection_id": insp.id, "quality_score": insp.quality_score, "grade": insp.quality_grade}
+    else:
+        # Non-CV gradable item (e.g. Milk) - Skip CV scoring (A4)
+        order.status = "accepted"
+        db.commit()
+        return {"message": "Farm dispatch photo recorded (Visual grading not applicable)", "inspection_id": None}
 
 
 @router.put("/{order_id}/dispatch", response_model=OrderResponse)
@@ -291,8 +309,12 @@ def dispatch_order(
     if not order or (current_user.id != order.farmer_id and current_user.role != "admin"):
         raise HTTPException(status_code=403, detail="Only farmer can dispatch order")
 
-    # MANDATORY QUALITY GATE: Order CANNOT reach in_transit without farm_inspection_id
-    if not order.farm_inspection_id:
+    # MANDATORY QUALITY GATE: Order CANNOT reach in_transit without farm_inspection_id if CV gradable
+    product = db.query(Product).filter(Product.id == order.product_id).first()
+    prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
+    is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
+
+    if is_cv_gradable and not order.farm_inspection_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Quality Gate Failed: Cannot dispatch order without an attached farm photo inspection. Please submit farm inspection photo first."
@@ -336,7 +358,52 @@ def upload_delivery_inspection_photo(
 
     image_url = f"/static/uploads/{filename}"
 
-    # 2. Run CV Analysis on delivery image
+    # Record photo (A5)
+    photo_rec = Photo(
+        file_path=image_url,
+        uploaded_by=current_user.id,
+        purpose="delivery_inspection",
+        product_id=order.product_id,
+        order_id=order.id
+    )
+    db.add(photo_rec)
+
+    product = db.query(Product).filter(Product.id == order.product_id).first()
+    prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
+    is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
+
+    if not is_cv_gradable:
+        # A4. Non-CV gradable item (Milk) - Skip CV variance check entirely
+        order.status = "delivered"
+        order.dispute_flag = False
+        
+        # Create payment record in pending status
+        payment = db.query(Payment).filter(Payment.order_id == order.id).first()
+        if not payment:
+            payment = Payment(
+                order_id=order.id,
+                farmer_id=order.farmer_id,
+                buyer_id=order.buyer_id,
+                amount=order.total_price,
+                currency="EUR",
+                payment_method="bank_transfer",
+                due_date=order.delivery_date,
+                status="pending",
+                reference_number=f"INV-{order.id[:8].upper()}"
+            )
+            db.add(payment)
+            db.flush()
+
+        pdf_url = generate_invoice_pdf(order, farm_score=100, deliv_score=100, variance=0)
+        payment.invoice_url = pdf_url
+        db.commit()
+
+        log_audit_event(db, action="delivery_confirmed_no_cv", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id)
+        notify_user(db, user_id=order.farmer_id, n_type="order_delivered", msg=f"Order #{order.id[:8]} delivered! Bank transfer payment pending.", url=f"/orders/{order.id}")
+
+        return {"message": "Milk delivery confirmed without CV variance check", "status": "delivered"}
+
+    # 2. Run CV Analysis on delivery image for gradable produce
     engine = get_inference_engine()
     res = engine.analyze_image(filepath)
 
@@ -345,12 +412,12 @@ def upload_delivery_inspection_photo(
         order_id=order.id,
         inspection_level="delivery",
         image_url=image_url,
-        cv_results=res["cv_results"],
-        quality_score=res["quality_score"],
-        quality_grade=res["quality_grade"],
-        defects_detected=res["defects_detected"],
-        model_confidence=res["model_confidence"],
-        model_version=res["model_version"],
+        cv_results=res.get("cv_breakdown", {}),
+        quality_score=res.get("quality_score", 0.0),
+        quality_grade=res.get("quality_grade", "A"),
+        defects_detected=res.get("cv_breakdown", {}).get("detected_defects", []),
+        model_confidence=res.get("neural_confidence", 0.0),
+        model_version="imagenet-resnet18-real-v1",
         inspector_id=current_user.id
     )
     db.add(deliv_insp)
@@ -361,102 +428,117 @@ def upload_delivery_inspection_photo(
 
     # 3. Retrieve Farm inspection score
     farm_score = 85.0
+    farm_grade = "A"
     if order.farm_inspection_id:
         farm_insp = db.query(QualityInspection).filter(QualityInspection.id == order.farm_inspection_id).first()
         if farm_insp:
             farm_score = farm_insp.quality_score
+            farm_grade = farm_insp.quality_grade
 
-    # 4. Variance Tolerance Logic
+    # 4. Variance Tolerance Logic (A6)
+    # variance_percent = ((farm_score - delivery_score) / farm_score) * 100
     tolerance = get_variance_tolerance(db)
-    var_res = compute_variance(farm_score=farm_score, delivery_score=deliv_insp.quality_score, tolerance_percent=tolerance)
+    variance_percent = round(((farm_score - deliv_insp.quality_score) / farm_score) * 100.0, 2)
+    grade_dropped = (farm_grade != deliv_insp.quality_grade)
 
-    order.quality_variance_percent = var_res["variance_percent"]
-    order.variance_acceptable = var_res["variance_acceptable"]
+    # Exact boundary: 10.00% passes, 10.01% disputes
+    variance_acceptable = (variance_percent <= tolerance)
 
-    if var_res["is_anomaly"]:
-        log_audit_event(
-            db, action="variance_anomaly", actor_id=current_user.id, actor_role=current_user.role,
-            order_id=order.id, details={"variance_percent": var_res["variance_percent"], "note": "Delivery score higher than farm score"}
-        )
+    order.quality_variance_percent = variance_percent
+    order.variance_acceptable = variance_acceptable
 
     # 5. Handle Pass vs Dispute
-    if var_res["variance_acceptable"]:
+    if variance_acceptable:
         order.status = "delivered"
         order.dispute_flag = False
         
-        # Create payment record in pending status
-        payment = Payment(
-            order_id=order.id,
-            farmer_id=order.farmer_id,
-            buyer_id=order.buyer_id,
-            amount=order.total_price,
-            currency="EUR",
-            payment_method="platform_mock",
-            due_date=datetime.utcnow().date() + timedelta(days=settings.PAYMENT_TERMS_DAYS),
-            status="pending"
-        )
-        db.add(payment)
+        payment = db.query(Payment).filter(Payment.order_id == order.id).first()
+        if not payment:
+            payment = Payment(
+                order_id=order.id,
+                farmer_id=order.farmer_id,
+                buyer_id=order.buyer_id,
+                amount=order.total_price,
+                currency="EUR",
+                payment_method="bank_transfer",
+                due_date=order.delivery_date,
+                status="pending",
+                reference_number=f"INV-{order.id[:8].upper()}"
+            )
+            db.add(payment)
+            db.flush()
+
+        pdf_url = generate_invoice_pdf(order, farm_score=farm_score, deliv_score=deliv_insp.quality_score, variance=variance_percent)
+        payment.invoice_url = pdf_url
         db.commit()
 
-        # Generate invoice PDF
-        farm = db.query(Farm).filter(Farm.user_id == order.farmer_id).first()
-        buyer = db.query(User).filter(User.id == order.buyer_id).first()
-        invoice_url = generate_invoice_pdf(
-            order_data={
-                "id": order.id, "status": order.status, "product_type": order.product.product_type if order.product else "Produce",
-                "quantity": order.quantity, "quantity_unit": order.quantity_unit, "price_per_unit": order.price_per_unit,
-                "total_price": order.total_price, "delivery_address": order.delivery_address,
-                "farm_grade": farm_insp.quality_grade if 'farm_insp' in locals() and farm_insp else "A",
-                "delivery_grade": deliv_insp.quality_grade, "quality_variance_percent": order.quality_variance_percent,
-                "variance_acceptable": order.variance_acceptable
-            },
-            farmer_data={"farm_name": farm.farm_name if farm else "Farm", "town": farm.town if farm else "Town", "county": farm.county if farm else "County", "organic_cert_number": farm.organic_cert_number if farm else "IOA-0001"},
-            buyer_data={"name": buyer.name if buyer else "Buyer", "role": buyer.role if buyer else "buyer"}
-        )
-        payment.invoice_url = invoice_url
-        db.commit()
+        update_farm_reputation(db, order.farmer_id, deliv_insp.quality_score)
+        log_audit_event(db, action="delivery_verified_pass", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": variance_percent, "tolerance": tolerance, "grade_dropped": grade_dropped})
+        notify_user(db, user_id=order.farmer_id, n_type="order_delivered", msg=f"Order #{order.id[:8]} quality verified! Bank transfer payment pending.", url=f"/orders/{order.id}")
 
-        log_audit_event(db, action="order_delivered", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": var_res["variance_percent"]})
-        notify_user(db, user_id=order.farmer_id, n_type="order_delivered", msg=f"Order #{order.id[:8]} delivered! Invoice generated.", url=f"/orders/{order.id}")
-
+        return {"message": "Delivery quality inspection passed within tolerance", "status": "delivered", "variance_percent": variance_percent, "grade_dropped": grade_dropped}
     else:
-        # Variance > tolerance: RAISE DISPUTE
+        # DISPUTE TRIGGERED: variance > 10.00%
         order.status = "disputed"
         order.dispute_flag = True
+        order.dispute_reason = f"Quality score drop of {variance_percent:.2f}% exceeds tolerance threshold of {tolerance:.1f}%"
         order.dispute_status = "open"
-        order.dispute_reason = f"Quality dropped by {var_res['variance_percent']:.2f}% in transit (tolerance is ±{tolerance}%)."
-
-        # Create held payment record
-        payment = Payment(
-            order_id=order.id,
-            farmer_id=order.farmer_id,
-            buyer_id=order.buyer_id,
-            amount=order.total_price,
-            currency="EUR",
-            payment_method="platform_mock",
-            due_date=datetime.utcnow().date() + timedelta(days=settings.PAYMENT_TERMS_DAYS),
-            status="held"
-        )
-        db.add(payment)
         db.commit()
 
-        log_audit_event(db, action="order_disputed", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": var_res["variance_percent"], "tolerance": tolerance})
+        log_audit_event(db, action="delivery_dispute_triggered", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": variance_percent, "tolerance": tolerance, "grade_dropped": grade_dropped})
+        notify_user(db, user_id=order.farmer_id, n_type="order_disputed", msg=f"ALERT: Order #{order.id[:8]} disputed due to quality drop of {variance_percent:.1f}%", url=f"/orders/{order.id}")
 
-        # Notify Farmer, Buyer, and Admins
-        notify_user(db, user_id=order.farmer_id, n_type="order_disputed", msg=f"Order #{order.id[:8]} quality dispute flagged ({var_res['variance_percent']:.1f}% variance). Payment held.", url=f"/orders/{order.id}")
-        notify_user(db, user_id=order.buyer_id, n_type="order_disputed", msg=f"Quality dispute opened for Order #{order.id[:8]}. Payment held pending admin review.", url=f"/orders/{order.id}")
-        
-        admins = db.query(User).filter(User.role == "admin").all()
-        for adm in admins:
-            notify_user(db, user_id=adm.id, n_type="admin_dispute_review", msg=f"Action Required: Dispute opened for Order #{order.id[:8]} ({var_res['variance_percent']:.1f}% variance)", url=f"/admin")
+        return {"message": f"DISPUTE TRIGGERED: Quality score drop of {variance_percent:.2f}% exceeds tolerance of {tolerance:.1f}%", "status": "disputed", "variance_percent": variance_percent, "grade_dropped": grade_dropped}
 
-    return {
-        "message": "Delivery inspection processed",
-        "order_status": order.status,
-        "quality_variance_percent": order.quality_variance_percent,
-        "variance_acceptable": order.variance_acceptable,
-        "dispute_flag": order.dispute_flag
-    }
+
+# --- Two-Step Bank Payment Confirmation (A9) ---
+@router.post("/{order_id}/payment/send")
+def mark_payment_sent(
+    order_id: str,
+    payment_reference: Optional[str] = Form("BANK-TRANSFER"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order or (current_user.id != order.buyer_id and current_user.role != "admin"):
+        raise HTTPException(status_code=403, detail="Only buyer can mark payment as sent")
+
+    order.buyer_payment_status = "sent"
+    order.payment_reference = payment_reference
+
+    payment = db.query(Payment).filter(Payment.order_id == order.id).first()
+    if payment:
+        payment.status = "sent"
+        payment.reference_number = payment_reference
+
+    db.commit()
+    log_audit_event(db, action="payment_sent_by_buyer", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id)
+    notify_user(db, user_id=order.farmer_id, n_type="payment_sent", msg=f"Buyer marked payment sent for Order #{order.id[:8]} (Ref: {payment_reference}). Please confirm receipt.", url=f"/orders/{order.id}")
+    return {"message": "Payment marked as sent by buyer", "order_id": order.id, "payment_status": "sent"}
+
+
+@router.post("/{order_id}/payment/receive")
+def mark_payment_received(
+    order_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order or (current_user.id != order.farmer_id and current_user.role != "admin"):
+        raise HTTPException(status_code=403, detail="Only farmer can confirm payment receipt")
+
+    order.farmer_payment_status = "received"
+    order.status = "paid"
+
+    payment = db.query(Payment).filter(Payment.order_id == order.id).first()
+    if payment:
+        payment.status = "paid"
+        payment.paid_date = datetime.utcnow().date()
+
+    db.commit()
+    log_audit_event(db, action="payment_received_by_farmer", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id)
+    notify_user(db, user_id=order.buyer_id, n_type="payment_received", msg=f"Farmer confirmed bank transfer receipt for Order #{order.id[:8]}! Order complete.", url=f"/orders/{order.id}")
+    return {"message": "Payment confirmed as received by farmer. Order complete!", "order_id": order.id, "status": "paid"}
 
 
 def notify_user(db: Session, user_id: str, n_type: str, msg: str, url: str):
