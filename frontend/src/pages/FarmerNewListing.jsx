@@ -116,7 +116,16 @@ const FarmerNewListing = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div>
               <label className="font-bold text-gray-700 block mb-1">Product Type</label>
-              <select value={productType} onChange={e=>{setProductType(e.target.value); setQuantityUnit(e.target.value === 'milk' ? 'litre' : 'kg');}} className="w-full border p-2.5 rounded-lg font-semibold">
+              <select 
+                value={productType} 
+                onChange={e=>{
+                  setProductType(e.target.value); 
+                  setQuantityUnit(e.target.value === 'milk' ? 'litre' : 'kg');
+                  setCvResult(null);
+                  setError('');
+                }} 
+                className="w-full border p-2.5 rounded-lg font-semibold"
+              >
                 <option value="onion">Organic Onion</option>
                 <option value="milk">Organic Raw Milk</option>
                 <option value="apple">Organic Apple</option>
