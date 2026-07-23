@@ -26,12 +26,12 @@ PRODUCT_CLASSES = [
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
 PRODUCT_SYNONYMS = {
-    "onion": ["onion", "turnip", "bulb", "radish", "shallot"],
-    "carrot": ["carrot", "zucchini", "butternut squash", "orange"],
-    "tomato": ["tomato", "pomegranate", "strawberry", "red", "apple"],
-    "apple": ["granny smith", "apple", "pomegranate", "fig"],
-    "potato": ["mashed potato", "potato", "turnip", "sweet potato"],
-    "banana": ["banana", "slug"],
+    "onion": ["onion", "turnip", "bulb", "shallot", "orange", "potato", "round"],
+    "carrot": ["carrot", "zucchini", "butternut squash"],
+    "tomato": ["tomato", "pomegranate", "cherry tomato"],
+    "apple": ["apple", "granny smith"],
+    "potato": ["potato", "sweet potato"],
+    "banana": ["banana", "plantain"],
     "bellpepper": ["bell pepper", "pepper", "capsicum"],
     "capsicum": ["bell pepper", "pepper", "capsicum"],
     "milk": ["carton", "milk can", "jug", "container", "bottle"],
@@ -146,9 +146,10 @@ class GradingInferenceEngine:
                 prod_probs = torch.softmax(prod_logits, dim=1).squeeze(0)
                 def_probs = torch.softmax(def_logits, dim=1).squeeze(0)
 
-            top1_prod_idx = torch.argmax(prod_probs).item()
-            predicted_product = PRODUCT_CLASSES[top1_prod_idx]
-            prod_confidence = float(prod_probs[top1_prod_idx].item() * 100.0)
+            top3_values, top3_indices = torch.topk(prod_probs, min(3, len(PRODUCT_CLASSES)))
+            top3_products = [PRODUCT_CLASSES[idx.item()] for idx in top3_indices]
+            predicted_product = top3_products[0]
+            prod_confidence = float(top3_values[0].item() * 100.0)
 
             top1_def_idx = torch.argmax(def_probs).item()
             predicted_defect = DEFECT_CLASSES[top1_def_idx]
@@ -156,9 +157,14 @@ class GradingInferenceEngine:
             exp_clean = expected_product.lower().strip()
             synonyms = PRODUCT_SYNONYMS.get(exp_clean, [exp_clean])
 
-            # Check mismatch against custom trained product head
-            is_match = (predicted_product == exp_clean) or any(syn in predicted_product for syn in synonyms)
-            if expected_product != "unknown" and not is_match and prod_confidence > 30.0:
+            # Check mismatch against top 3 custom trained predictions & visual synonyms
+            is_match = False
+            for pred_p in top3_products:
+                if pred_p == exp_clean or any(syn in pred_p for syn in synonyms):
+                    is_match = True
+                    break
+
+            if expected_product != "unknown" and not is_match and prod_confidence > 35.0:
                 return {
                     "product_mismatch": True,
                     "quality_grade": "R",
