@@ -10,7 +10,7 @@ const FarmerNewListing = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [productType, setProductType] = useState(searchParams.get('product_type') || 'onion');
+  const [productType, setProductType] = useState(searchParams.get('product_type') || 'tomato');
   const [variety, setVariety] = useState('Organic Premium');
   const [productionDate, setProductionDate] = useState(new Date().toISOString().split('T')[0]);
   const [availableQuantity, setAvailableQuantity] = useState(parseFloat(searchParams.get('qty')) || 20.0);
@@ -126,12 +126,13 @@ const FarmerNewListing = () => {
                 }} 
                 className="w-full border p-2.5 rounded-lg font-semibold"
               >
-                <option value="onion">Organic Onion</option>
-                <option value="milk">Organic Raw Milk</option>
                 <option value="apple">Organic Apple</option>
-                <option value="potato">Organic Potato</option>
-                <option value="carrot">Organic Carrot</option>
-                <option value="cheese">Organic Artisan Cheese</option>
+                <option value="banana">Organic Banana</option>
+                <option value="bitter_gourd">Organic Bitter Gourd</option>
+                <option value="capsicum">Organic Capsicum</option>
+                <option value="milk">Organic Raw Milk</option>
+                <option value="orange">Organic Orange</option>
+                <option value="tomato">Organic Tomato</option>
               </select>
             </div>
 

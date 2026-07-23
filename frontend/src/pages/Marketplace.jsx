@@ -73,12 +73,13 @@ const Marketplace = () => {
             <label className="text-xs font-bold text-gray-700 block mb-1">Produce / Dairy Type</label>
             <select value={productType} onChange={e=>setProductType(e.target.value)} className="w-full border p-2 rounded-lg text-xs font-semibold">
               <option value="">All Produce Types</option>
-              <option value="onion">Organic Onion</option>
-              <option value="milk">Organic Raw Milk</option>
               <option value="apple">Organic Apple</option>
-              <option value="potato">Organic Potato</option>
-              <option value="carrot">Organic Carrot</option>
-              <option value="cheese">Artisan Cheese</option>
+              <option value="banana">Organic Banana</option>
+              <option value="bitter_gourd">Organic Bitter Gourd</option>
+              <option value="capsicum">Organic Capsicum</option>
+              <option value="milk">Organic Raw Milk</option>
+              <option value="orange">Organic Orange</option>
+              <option value="tomato">Organic Tomato</option>
             </select>
           </div>
 
