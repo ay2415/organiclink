@@ -252,9 +252,14 @@ const OrderDetail = () => {
 
       {/* State Machine Actions & Timeline */}
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-        <h3 className="font-bold text-gray-900 text-sm border-b pb-2">Order State Machine Controls</h3>
+        <h3 className="font-bold text-gray-900 text-sm border-b pb-2">Order State Machine & Bank Settlement Controls</h3>
 
-        <div className="flex flex-wrap gap-3">
+        {/* Bank Settlement Notice (A9) */}
+        <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 font-medium">
+          <strong>Bank Transfer Settlement:</strong> Payments are made directly between buyer and farmer by bank transfer. This platform records status only.
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
           {isFarmer && (order.status === 'pending' || order.status === 'negotiating') && (
             <button onClick={handleFarmerAccept} className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold">
               Accept Order
@@ -264,6 +269,36 @@ const OrderDetail = () => {
           {isFarmer && (order.status === 'accepted' || order.status === 'quality_verified') && (
             <button onClick={handleDispatch} className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-bold flex items-center gap-1">
               <Truck className="w-4 h-4" /> Dispatch Order to Transit
+            </button>
+          )}
+
+          {/* Two-step Payment Confirmation (A9) */}
+          {isBuyer && (order.status === 'delivered' || order.status === 'quality_verified') && order.buyer_payment_status !== 'sent' && (
+            <button
+              onClick={async () => {
+                const ref = prompt("Enter Bank Transfer Reference (optional):", "BANK-TRANSFER-01");
+                if (ref !== null) {
+                  await api.post(`/api/orders/${id}/payment/send`, `payment_reference=${encodeURIComponent(ref)}`, {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                  });
+                  fetchOrderDetail();
+                }
+              }}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow"
+            >
+              Mark Bank Transfer Sent
+            </button>
+          )}
+
+          {isFarmer && (order.status === 'delivered' || order.buyer_payment_status === 'sent') && order.status !== 'paid' && (
+            <button
+              onClick={async () => {
+                await api.post(`/api/orders/${id}/payment/receive`);
+                fetchOrderDetail();
+              }}
+              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-xs font-bold shadow"
+            >
+              Confirm Bank Transfer Received (Mark Paid)
             </button>
           )}
         </div>

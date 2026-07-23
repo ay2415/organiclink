@@ -1,11 +1,13 @@
 """
 Real-World Dataset Training Script for OrganicLink Computer Vision.
-Designed to train directly on Kaggle datasets (e.g., 'Fruit and Vegetable Disease (Healthy vs Rotten)').
+Trains a Multi-Head ResNet18 Neural Network on Real Produce Datasets found in:
+- `backend/cv/archive/`
+- `backend/cv/data/`
 
-Supported Folders:
-- Tomato_Healthy / Tomato__Healthy -> (tomato, fresh)
-- Tomato_Rotten / Tomato__Rotten -> (tomato, major_defect)
-- Apple_Healthy, Potato_Healthy, Carrot_Healthy, etc.
+Supported Folder Patterns:
+- `fresh_tomato` / `stale_tomato`
+- `fresh_apple` / `stale_apple`
+- `Tomato_Healthy` / `Tomato_Rotten`
 """
 
 import os
@@ -21,6 +23,7 @@ from torchvision.models import resnet18, ResNet18_Weights
 
 # Define Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ARCHIVE_DIR = os.path.join(BASE_DIR, "archive")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 MODEL_PATH = os.path.join(MODELS_DIR, "quality_model.pt")
@@ -28,7 +31,7 @@ REPORT_JSON_PATH = os.path.join(MODELS_DIR, "eval_report.json")
 
 PRODUCT_CLASSES = [
     "onion", "milk", "apple", "potato", "carrot", "cheese", "tomato",
-    "banana", "bellpepper", "cucumber", "grape", "guava", "mango", "orange", "strawberry"
+    "banana", "bellpepper", "capsicum", "cucumber", "grape", "guava", "mango", "orange", "strawberry"
 ]
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
@@ -56,53 +59,55 @@ class MultiHeadProduceModel(nn.Module):
         return prod_logits, defect_logits
 
 
-class KaggleProduceDataset(Dataset):
+class RealDatasetScanner(Dataset):
     """
-    Scans real images from backend/cv/data/
-    Automatically parses Kaggle folder names like:
-    - Tomato_Healthy / Tomato__Healthy -> (tomato, fresh)
-    - Tomato_Rotten / Tomato__Rotten -> (tomato, major_defect)
-    - Apple___fresh, onion___major_defect, etc.
+    Scans real images from backend/cv/archive/ and backend/cv/data/
+    Automatically parses folder names like:
+    - fresh_tomato -> (tomato, fresh)
+    - stale_tomato -> (tomato, major_defect)
+    - Tomato_Healthy / Tomato_Rotten
     """
-    def __init__(self, root_dir, transform=None):
-        self.root_dir = root_dir
+    def __init__(self, search_dirs, transform=None):
         self.transform = transform
         self.samples = []
 
-        if not os.path.exists(root_dir):
-            return
+        for target_dir in search_dirs:
+            if not os.path.exists(target_dir):
+                continue
 
-        for root, dirs, files in os.walk(root_dir):
-            for fname in files:
-                if fname.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-                    full_path = os.path.join(root, fname)
-                    folder_name = os.path.basename(root).lower()
+            for root, dirs, files in os.walk(target_dir):
+                for fname in files:
+                    if fname.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                        full_path = os.path.join(root, fname)
+                        folder_name = os.path.basename(root).lower()
 
-                    prod_label = None
-                    def_label = None
+                        prod_label = None
+                        def_label = None
 
-                    # Parse folder name like "tomato_healthy" or "apple__rotten"
-                    clean_folder = folder_name.replace("__", "_")
-                    
-                    # 1. Product mapping
-                    for i, p in enumerate(PRODUCT_CLASSES):
-                        if p in clean_folder or p in fname.lower():
-                            prod_label = i
-                            break
+                        clean_folder = folder_name.replace("__", "_")
+                        
+                        # 1. Product mapping
+                        for i, p in enumerate(PRODUCT_CLASSES):
+                            if p in clean_folder or p in fname.lower():
+                                prod_label = i
+                                break
 
-                    # 2. Defect mapping (Healthy -> fresh, Rotten -> major_defect)
-                    if "healthy" in clean_folder or "fresh" in clean_folder:
-                        def_label = DEFECT_CLASSES.index("fresh")
-                    elif "rotten" in clean_folder or "major" in clean_folder:
-                        def_label = DEFECT_CLASSES.index("major_defect")
-                    elif "minor" in clean_folder or "defect" in clean_folder:
-                        def_label = DEFECT_CLASSES.index("minor_defect")
-                    else:
-                        def_label = DEFECT_CLASSES.index("fresh")
+                        # Special alias: capsicum -> bellpepper
+                        if prod_label is None and ("capsicum" in clean_folder or "bellpepper" in clean_folder):
+                            prod_label = PRODUCT_CLASSES.index("bellpepper")
 
-                    # If product is matched, record sample
-                    if prod_label is not None:
-                        self.samples.append((full_path, prod_label, def_label))
+                        # 2. Defect mapping (healthy/fresh -> fresh, rotten/stale -> major_defect)
+                        if "healthy" in clean_folder or "fresh" in clean_folder:
+                            def_label = DEFECT_CLASSES.index("fresh")
+                        elif "rotten" in clean_folder or "stale" in clean_folder or "major" in clean_folder:
+                            def_label = DEFECT_CLASSES.index("major_defect")
+                        elif "minor" in clean_folder or "defect" in clean_folder:
+                            def_label = DEFECT_CLASSES.index("minor_defect")
+                        else:
+                            def_label = DEFECT_CLASSES.index("fresh")
+
+                        if prod_label is not None:
+                            self.samples.append((full_path, prod_label, def_label))
 
     def __len__(self):
         return len(self.samples)
@@ -117,22 +122,17 @@ class KaggleProduceDataset(Dataset):
 
 def train_model():
     os.makedirs(MODELS_DIR, exist_ok=True)
-    os.makedirs(DATA_DIR, exist_ok=True)
 
-    dataset_all = KaggleProduceDataset(DATA_DIR)
+    dataset_all = RealDatasetScanner([ARCHIVE_DIR, DATA_DIR])
     if len(dataset_all) == 0:
         print("\n" + "="*75)
-        print("ERROR: NO REAL KAGGLE IMAGES FOUND IN `backend/cv/data/`")
-        print("Please extract your Kaggle ZIP into `backend/cv/data/`!")
-        print("Expected folders inside `backend/cv/data/`:")
-        print("  - Tomato_Healthy")
-        print("  - Tomato_Rotten")
-        print("  - Onion_Healthy (or Onion___fresh)")
-        print("  - Potato_Healthy / Potato_Rotten")
+        print("ERROR: NO REAL IMAGES FOUND IN `backend/cv/archive/` OR `backend/cv/data/`")
         print("="*75 + "\n")
         return None
 
-    print(f"\nSuccessfully loaded {len(dataset_all)} REAL Kaggle images from {DATA_DIR}!\n")
+    print(f"\n===========================================================")
+    print(f"SUCCESS: Loaded {len(dataset_all)} REAL produce images from dataset!")
+    print(f"===========================================================\n")
 
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
@@ -167,7 +167,7 @@ def train_model():
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
 
     epochs = 6
-    print(f"Training Multi-Head ResNet18 model on Kaggle Dataset for {epochs} epochs...")
+    print(f"Training Multi-Head ResNet18 model on REAL images for {epochs} epochs on {device}...")
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
@@ -209,7 +209,7 @@ def train_model():
 
     report = {
         "architecture": "MultiHeadProduceModel (ResNet18)",
-        "dataset_type": "Kaggle Fruit and Vegetable Diseases Dataset",
+        "dataset_type": "Real Fruit and Vegetable Images (Archive & Data)",
         "total_samples": len(dataset_all),
         "train_samples": train_size,
         "val_samples": val_size

@@ -1,7 +1,7 @@
 """
 Real-World Inference Engine for OrganicLink Produce Quality & Verification.
-Uses PyTorch's Official Pre-trained ResNet18 Deep Neural Network (ImageNet)
-for Zero-Download Real-World Product Classification and OpenCV for Sub-metric Analysis.
+Loads Multi-Head Neural Network (if trained on real dataset) or ResNet18 Pretrained Model.
+Enforces strict product mismatch detection (e.g., uploading Carrot when Onion is selected).
 """
 
 import os
@@ -15,18 +15,46 @@ from torchvision.models import resnet18, ResNet18_Weights
 
 from cv.grading import compute_quality_score, score_to_grade
 
-MODEL_VERSION = "imagenet-resnet18-real-v1"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "models", "quality_model.pt")
+MODEL_VERSION = "resnet18-real-v2"
 
-# Visual synonyms mapping expected product to ImageNet category keywords
+PRODUCT_CLASSES = [
+    "onion", "milk", "apple", "potato", "carrot", "cheese", "tomato",
+    "banana", "bellpepper", "capsicum", "cucumber", "grape", "guava", "mango", "orange", "strawberry"
+]
+DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
+
 PRODUCT_SYNONYMS = {
-    "tomato": ["tomato", "bell pepper", "pomegranate", "strawberry", "red", "apple", "vegetable", "fruit"],
-    "apple": ["granny smith", "apple", "pomegranate", "fig", "strawberry", "fruit"],
-    "onion": ["onion", "turnip", "mushroom", "bulb", "radish", "acorn squash"],
-    "potato": ["mashed potato", "potato", "turnip", "sweet potato", "brown", "butternut squash"],
+    "onion": ["onion", "turnip", "bulb", "radish", "shallot"],
     "carrot": ["carrot", "zucchini", "butternut squash", "orange"],
-    "milk": ["carton", "milk can", "water bottle", "bottle", "jug", "container"],
-    "cheese": ["bagel", "cheeseburger", "loaf", "dough", "yellow"]
+    "tomato": ["tomato", "pomegranate", "strawberry", "red", "apple"],
+    "apple": ["granny smith", "apple", "pomegranate", "fig"],
+    "potato": ["mashed potato", "potato", "turnip", "sweet potato"],
+    "banana": ["banana", "slug"],
+    "bellpepper": ["bell pepper", "pepper", "capsicum"],
+    "capsicum": ["bell pepper", "pepper", "capsicum"],
+    "milk": ["carton", "milk can", "jug", "container", "bottle"],
+    "cheese": ["bagel", "cheeseburger", "loaf", "dough"]
 }
+
+
+class MultiHeadProduceModel(nn.Module):
+    def __init__(self, num_products=len(PRODUCT_CLASSES), num_defects=len(DEFECT_CLASSES)):
+        super().__init__()
+        backbone = resnet18(weights=None)
+        in_features = backbone.fc.in_features
+        backbone.fc = nn.Identity()
+        self.backbone = backbone
+
+        self.product_head = nn.Linear(in_features, num_products)
+        self.defect_head = nn.Linear(in_features, num_defects)
+
+    def forward(self, x):
+        features = self.backbone(x)
+        prod_logits = self.product_head(features)
+        defect_logits = self.defect_head(features)
+        return prod_logits, defect_logits
 
 
 class GradingInferenceEngine:
@@ -36,7 +64,9 @@ class GradingInferenceEngine:
         if cls._instance is None:
             cls._instance = super(GradingInferenceEngine, cls).__new__(cls)
             cls._instance.model = None
+            cls._instance.custom_model = False
             cls._instance.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            
             cls._instance.weights = ResNet18_Weights.DEFAULT
             cls._instance.transform = cls._instance.weights.transforms()
             cls._instance.categories = [c.lower() for c in cls._instance.weights.meta["categories"]]
@@ -44,12 +74,26 @@ class GradingInferenceEngine:
         return cls._instance
 
     def load_model(self):
-        print("Loading official PyTorch Pre-trained ResNet18 Deep Neural Network...")
+        if os.path.exists(MODEL_PATH):
+            try:
+                print(f"Loading custom trained Multi-Head Produce Model from {MODEL_PATH}...")
+                model = MultiHeadProduceModel()
+                model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
+                model.to(self.device)
+                model.eval()
+                self.model = model
+                self.custom_model = True
+                print("Custom Multi-Head Neural Network loaded successfully!")
+                return
+            except Exception as e:
+                print(f"Failed to load custom model weights ({e}). Falling back to official ResNet18.")
+
+        print("Loading official PyTorch Pre-trained ResNet18...")
         model = resnet18(weights=self.weights)
         model.to(self.device)
         model.eval()
         self.model = model
-        print("PyTorch Pre-trained Neural Network successfully loaded into memory!")
+        self.custom_model = False
 
     def extract_opencv_metrics(self, image_path: str) -> dict:
         img_bgr = cv2.imread(image_path)
@@ -64,10 +108,7 @@ class GradingInferenceEngine:
         img_hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
         h, s, v = cv2.split(img_hsv)
 
-        # 1. Colour Vibrancy
         vibrancy = float(np.mean(s) / 2.55)
-
-        # 2. Colour Uniformity
         h_float = h.astype(np.float32)
         median_h = np.median(h_float)
         if median_h < 15 or median_h > 165:
@@ -75,11 +116,8 @@ class GradingInferenceEngine:
             
         hue_std = float(np.std(h_float))
         uniformity = float(max(0.0, 100.0 - min(hue_std * 1.5, 100.0)))
-
-        # 3. Brightness
         brightness = float(np.mean(v) / 2.55)
 
-        # 4. Defect Coverage Percent
         v_median = cv2.medianBlur(v, 15)
         diff = cv2.subtract(v_median, v)
         _, defect_mask = cv2.threshold(diff, 40, 255, cv2.THRESH_BINARY)
@@ -99,46 +137,72 @@ class GradingInferenceEngine:
             self.load_model()
             
         metrics = self.extract_opencv_metrics(image_path)
-
-        # Open PIL image & forward pass through Neural Network
         pil_img = Image.open(image_path).convert("RGB")
         input_tensor = self.transform(pil_img).unsqueeze(0).to(self.device)
 
-        with torch.no_grad():
-            outputs = self.model(input_tensor)
-            probs = torch.softmax(outputs, dim=1).squeeze(0)
+        if self.custom_model:
+            with torch.no_grad():
+                prod_logits, def_logits = self.model(input_tensor)
+                prod_probs = torch.softmax(prod_logits, dim=1).squeeze(0)
+                def_probs = torch.softmax(def_logits, dim=1).squeeze(0)
 
-        # Top 10 predicted categories from Real-World ImageNet Neural Network
-        top10_values, top10_indices = torch.topk(probs, 10)
-        top10_labels = [self.categories[idx.item()] for idx in top10_indices]
-        top1_label = top10_labels[0]
-        top1_prob = float(top10_values[0].item() * 100.0)
+            top1_prod_idx = torch.argmax(prod_probs).item()
+            predicted_product = PRODUCT_CLASSES[top1_prod_idx]
+            prod_confidence = float(prod_probs[top1_prod_idx].item() * 100.0)
 
-        # Product Mismatch Check using Deep Neural Network
-        product_mismatch = False
-        if expected_product != "unknown":
+            top1_def_idx = torch.argmax(def_probs).item()
+            predicted_defect = DEFECT_CLASSES[top1_def_idx]
+
             exp_clean = expected_product.lower().strip()
             synonyms = PRODUCT_SYNONYMS.get(exp_clean, [exp_clean])
 
-            # Check if expected product or any of its synonyms appear in top 10 neural network predictions
-            match_found = False
-            for label in top10_labels:
-                if any(syn in label for syn in synonyms):
-                    match_found = True
-                    break
-
-            if not match_found and top1_prob > 25.0:
-                product_mismatch = True
+            # Check mismatch against custom trained product head
+            is_match = (predicted_product == exp_clean) or any(syn in predicted_product for syn in synonyms)
+            if expected_product != "unknown" and not is_match and prod_confidence > 30.0:
                 return {
                     "product_mismatch": True,
                     "quality_grade": "R",
                     "quality_score": 0.0,
                     "cv_breakdown": {
-                        "error": f"Neural Network identified image as '{top1_label.capitalize()}' ({top1_prob:.1f}% confidence), which does not match requested '{expected_product.capitalize()}'"
+                        "error": f"Product Mismatch Detected: Neural Network identified image as '{predicted_product.capitalize()}' ({prod_confidence:.1f}% confidence), which does not match requested listing product '{expected_product.capitalize()}'."
                     }
                 }
 
-        # Defect identification using OpenCV explainable metrics
+            top1_label = predicted_product.capitalize()
+            top1_prob = prod_confidence
+
+        else:
+            # Fallback ResNet18 ImageNet classification
+            with torch.no_grad():
+                outputs = self.model(input_tensor)
+                probs = torch.softmax(outputs, dim=1).squeeze(0)
+
+            top10_values, top10_indices = torch.topk(probs, 10)
+            top10_labels = [self.categories[idx.item()] for idx in top10_indices]
+            top1_label = top10_labels[0]
+            top1_prob = float(top10_values[0].item() * 100.0)
+
+            if expected_product != "unknown":
+                exp_clean = expected_product.lower().strip()
+                synonyms = PRODUCT_SYNONYMS.get(exp_clean, [exp_clean])
+
+                match_found = False
+                for label in top10_labels:
+                    if any(syn in label for syn in synonyms):
+                        match_found = True
+                        break
+
+                if not match_found and top1_prob > 25.0:
+                    return {
+                        "product_mismatch": True,
+                        "quality_grade": "R",
+                        "quality_score": 0.0,
+                        "cv_breakdown": {
+                            "error": f"Product Mismatch Detected: Neural Network identified image as '{top1_label.capitalize()}' ({top1_prob:.1f}% confidence), which does not match requested listing product '{expected_product.capitalize()}'."
+                        }
+                    }
+
+        # Sub-metric quality scoring
         defects = []
         if metrics["defect_coverage_percent"] > 5.0:
             defects.append("surface_blemishes")
@@ -174,12 +238,10 @@ class GradingInferenceEngine:
                 "colour_uniformity": metrics["colour_uniformity"],
                 "brightness": metrics["brightness"],
                 "defect_coverage_percent": metrics["defect_coverage_percent"],
-                "classifier_confidence": {top10_labels[i]: round(float(top10_values[i].item()), 4) for i in range(3)},
                 "detected_defects": defects
             }
         }
 
 
-# Singleton accessor
 def get_inference_engine():
     return GradingInferenceEngine()

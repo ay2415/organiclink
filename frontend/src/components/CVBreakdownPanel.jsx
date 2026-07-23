@@ -2,7 +2,13 @@ import React from 'react';
 import GradeBadge from './GradeBadge';
 
 const CVBreakdownPanel = ({ inspection, title = "Computer Vision Quality Inspection" }) => {
-  if (!inspection) return null;
+  if (!inspection || !inspection.quality_grade) {
+    return (
+      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-slate-700 text-xs font-semibold text-center">
+        Visual grading not applicable
+      </div>
+    );
+  }
 
   const cv = inspection.cv_results || {};
   const probs = cv.class_probabilities || {};

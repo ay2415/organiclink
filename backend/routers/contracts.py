@@ -48,7 +48,19 @@ def create_contract(
 
 @router.get("/farms/{farm_id}/contracts", response_model=List[ContractResponse])
 def list_farm_contracts(farm_id: str, db: Session = Depends(get_db)):
-    return db.query(Contract).filter(Contract.farm_id == farm_id).all()
+    from datetime import date
+    contracts = db.query(Contract).filter(Contract.farm_id == farm_id).all()
+    today = date.today()
+    res = []
+    for c in contracts:
+        c_res = ContractResponse.model_validate(c)
+        if c.end_date:
+            days_rem = (c.end_date - today).days
+            c_res.days_remaining = days_rem
+            if days_rem < 0:
+                c_res.status = "expired"
+        res.append(c_res)
+    return res
 
 
 @router.put("/contracts/{contract_id}", response_model=ContractResponse)

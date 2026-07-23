@@ -1,6 +1,14 @@
 import React from 'react';
 
 const GradeBadge = ({ grade, score }) => {
+  if (!grade) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+        Visual grading not applicable
+      </span>
+    );
+  }
+
   const getStyle = (g) => {
     switch (g) {
       case 'A': return 'bg-emerald-100 text-emerald-800 border-emerald-300';

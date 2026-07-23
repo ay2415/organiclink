@@ -157,6 +157,7 @@ class ContractResponse(BaseModel):
     status: str
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    days_remaining: Optional[int] = None
     created_at: datetime
 
     class Config:

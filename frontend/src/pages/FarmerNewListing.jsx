@@ -195,21 +195,30 @@ const FarmerNewListing = () => {
             </div>
 
             <div className="w-full sm:w-1/2 space-y-3">
-              <button
-                type="button"
-                onClick={handleAnalyzePhoto}
-                disabled={!imageFile || submitting}
-                className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-              >
-                Run Instant CV Quality Analysis
-              </button>
-
-              {cvResult && cvResult.product_mismatch ? (
-                <div className="bg-red-50 border border-red-300 text-red-800 p-3 rounded-xl text-xs font-bold mt-2">
-                  {cvResult.cv_breakdown?.error || "Product mismatch detected."}
+              {productType === 'milk' ? (
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-center space-y-1">
+                  <span className="text-xs font-bold text-slate-700 block">Visual grading not applicable</span>
+                  <span className="text-[11px] text-slate-500 block">Milk & liquid dairy quality indicators (fat, protein, bacteria) are lab-certified. Photo is recorded without CV grade.</span>
                 </div>
-              ) : cvResult && (
-                <CVBreakdownPanel inspection={{ cv_results: cvResult.cv_breakdown, quality_grade: cvResult.quality_grade, quality_score: cvResult.quality_score }} />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleAnalyzePhoto}
+                    disabled={!imageFile || submitting}
+                    className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                  >
+                    Run Instant CV Quality Analysis
+                  </button>
+
+                  {cvResult && cvResult.product_mismatch ? (
+                    <div className="bg-red-50 border border-red-300 text-red-800 p-3 rounded-xl text-xs font-bold mt-2">
+                      {cvResult.cv_breakdown?.error || "Product mismatch detected."}
+                    </div>
+                  ) : cvResult && (
+                    <CVBreakdownPanel inspection={{ cv_results: cvResult.cv_breakdown, quality_grade: cvResult.quality_grade, quality_score: cvResult.quality_score }} />
+                  )}
+                </>
               )}
             </div>
           </div>
