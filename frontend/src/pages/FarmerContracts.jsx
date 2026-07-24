@@ -75,10 +75,13 @@ const FarmerContracts = () => {
         <div>
           <label className="font-bold text-gray-700 block mb-1">Product</label>
           <select value={formData.product_type} onChange={e=>setFormData({...formData, product_type: e.target.value})} className="w-full border p-2 rounded-lg">
-            <option value="onion">Onion</option>
-            <option value="milk">Milk</option>
             <option value="apple">Apple</option>
-            <option value="potato">Potato</option>
+            <option value="banana">Banana</option>
+            <option value="bitter_gourd">Bitter Gourd</option>
+            <option value="capsicum">Capsicum</option>
+            <option value="milk">Milk</option>
+            <option value="orange">Orange</option>
+            <option value="tomato">Tomato</option>
           </select>
         </div>
         <div>

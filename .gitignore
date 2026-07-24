@@ -8,7 +8,9 @@ venv/
 *.db
 
 # Large Datasets & Media Artifacts (Do NOT push to GitHub)
+backend/cv/Fruit And Vegetable Diseases Dataset/
 backend/cv/archive/
+backend/cv/quality dataset/
 backend/cv/data/
 backend/uploads/
 *.pt

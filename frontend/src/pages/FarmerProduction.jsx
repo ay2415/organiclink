@@ -110,11 +110,13 @@ const FarmerProduction = () => {
               }}
               className="w-full border p-2 rounded-lg font-semibold"
             >
-              <option value="milk">Milk (Liquid Dairy)</option>
-              <option value="onion">Onion (Produce)</option>
               <option value="apple">Apple (Fruit)</option>
-              <option value="potato">Potato (Crops)</option>
-              <option value="carrot">Carrot (Crops)</option>
+              <option value="banana">Banana (Fruit)</option>
+              <option value="bitter_gourd">Bitter Gourd (Vegetable)</option>
+              <option value="capsicum">Capsicum (Vegetable)</option>
+              <option value="milk">Milk (Liquid Dairy)</option>
+              <option value="orange">Orange (Fruit)</option>
+              <option value="tomato">Tomato (Produce)</option>
             </select>
           </div>
 

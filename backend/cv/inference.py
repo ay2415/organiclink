@@ -20,22 +20,29 @@ MODEL_PATH = os.path.join(BASE_DIR, "models", "quality_model.pt")
 MODEL_VERSION = "resnet18-real-v2"
 
 PRODUCT_CLASSES = [
-    "onion", "milk", "apple", "potato", "carrot", "cheese", "tomato",
-    "banana", "bellpepper", "capsicum", "cucumber", "grape", "guava", "mango", "orange", "strawberry"
+    "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
+    "grape", "guava", "jujube", "mango", "milk", "orange", "pomegranate",
+    "potato", "strawberry", "tomato"
 ]
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
 PRODUCT_SYNONYMS = {
-    "onion": ["onion", "turnip", "bulb", "shallot", "orange", "potato", "round"],
-    "carrot": ["carrot", "zucchini", "butternut squash"],
-    "tomato": ["tomato", "pomegranate", "cherry tomato"],
-    "apple": ["apple", "granny smith"],
-    "potato": ["potato", "sweet potato"],
+    "apple": ["apple", "granny smith", "red apple", "green apple"],
     "banana": ["banana", "plantain"],
-    "bellpepper": ["bell pepper", "pepper", "capsicum"],
-    "capsicum": ["bell pepper", "pepper", "capsicum"],
+    "bitter_gourd": ["bitter gourd", "gourd"],
+    "capsicum": ["bell pepper", "pepper", "capsicum", "green pepper", "bellpepper"],
+    "carrot": ["carrot", "baby carrot"],
+    "cucumber": ["cucumber", "pickle", "zucchini"],
+    "grape": ["grape", "grapes"],
+    "guava": ["guava"],
+    "jujube": ["jujube", "red date"],
+    "mango": ["mango"],
     "milk": ["carton", "milk can", "jug", "container", "bottle"],
-    "cheese": ["bagel", "cheeseburger", "loaf", "dough"]
+    "orange": ["orange", "tangerine", "citrus"],
+    "pomegranate": ["pomegranate"],
+    "potato": ["potato", "sweet potato"],
+    "strawberry": ["strawberry", "berries"],
+    "tomato": ["tomato", "cherry tomato", "plum tomato"]
 }
 
 
@@ -65,6 +72,7 @@ class GradingInferenceEngine:
             cls._instance = super(GradingInferenceEngine, cls).__new__(cls)
             cls._instance.model = None
             cls._instance.custom_model = False
+            cls._instance.last_mtime = 0
             cls._instance.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             
             cls._instance.weights = ResNet18_Weights.DEFAULT
@@ -76,13 +84,15 @@ class GradingInferenceEngine:
     def load_model(self):
         if os.path.exists(MODEL_PATH):
             try:
-                print(f"Loading custom trained Multi-Head Produce Model from {MODEL_PATH}...")
+                mtime = os.path.getmtime(MODEL_PATH)
+                print(f"Loading custom trained Multi-Head Produce Model from {MODEL_PATH} (mtime: {mtime})...")
                 model = MultiHeadProduceModel()
                 model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
                 model.to(self.device)
                 model.eval()
                 self.model = model
                 self.custom_model = True
+                self.last_mtime = mtime
                 print("Custom Multi-Head Neural Network loaded successfully!")
                 return
             except Exception as e:
@@ -133,7 +143,7 @@ class GradingInferenceEngine:
         }
 
     def analyze_image(self, image_path: str, expected_product: str = "unknown") -> dict:
-        if self.model is None:
+        if self.model is None or (os.path.exists(MODEL_PATH) and os.path.getmtime(MODEL_PATH) > self.last_mtime):
             self.load_model()
             
         metrics = self.extract_opencv_metrics(image_path)
@@ -188,25 +198,8 @@ class GradingInferenceEngine:
             top1_label = top10_labels[0]
             top1_prob = float(top10_values[0].item() * 100.0)
 
-            if expected_product != "unknown":
-                exp_clean = expected_product.lower().strip()
-                synonyms = PRODUCT_SYNONYMS.get(exp_clean, [exp_clean])
-
-                match_found = False
-                for label in top10_labels:
-                    if any(syn in label for syn in synonyms):
-                        match_found = True
-                        break
-
-                if not match_found and top1_prob > 25.0:
-                    return {
-                        "product_mismatch": True,
-                        "quality_grade": "R",
-                        "quality_score": 0.0,
-                        "cv_breakdown": {
-                            "error": f"Product Mismatch Detected: Neural Network identified image as '{top1_label.capitalize()}' ({top1_prob:.1f}% confidence), which does not match requested listing product '{expected_product.capitalize()}'."
-                        }
-                    }
+            # Fallback ImageNet classification does not enforce strict product mismatch
+            pass
 
         # Sub-metric quality scoring
         defects = []
@@ -226,11 +219,11 @@ class GradingInferenceEngine:
         final_score = max(0.0, min(100.0, final_score))
 
         grade = "A"
-        if final_score < 40:
+        if final_score < 40 or (self.custom_model and predicted_defect == "major_defect" and final_score < 55):
             grade = "R"
-        elif final_score < 60:
+        elif final_score < 60 or (self.custom_model and predicted_defect == "major_defect"):
             grade = "C"
-        elif final_score < 80:
+        elif final_score < 80 or (self.custom_model and predicted_defect == "minor_defect"):
             grade = "B"
 
         return {

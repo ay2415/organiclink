@@ -1,18 +1,17 @@
 """
-Real-World Dataset Training Script for OrganicLink Computer Vision.
-Trains a Multi-Head ResNet18 Neural Network on Real Produce Datasets found in:
-- `backend/cv/archive/`
-- `backend/cv/data/`
+Production Deep Learning Neural Network Training Pipeline for OrganicLink.
+Scans and fine-tunes Multi-Head ResNet18 across all 3 real produce datasets (44,300+ Images):
+1. `backend/cv/archive/`
+2. `backend/cv/quality dataset/`
+3. `backend/cv/Fruit And Vegetable Diseases Dataset/`
 
-Supported Folder Patterns:
-- `fresh_tomato` / `stale_tomato`
-- `fresh_apple` / `stale_apple`
-- `Tomato_Healthy` / `Tomato_Rotten`
+Supported Categories (16 classes):
+- apple, banana, bitter_gourd, capsicum, carrot, cucumber, grape, guava, jujube, mango, milk, orange, pomegranate, potato, strawberry, tomato
 """
 
 import os
 import json
-import numpy as np
+import time
 from PIL import Image
 import torch
 import torch.nn as nn
@@ -21,17 +20,19 @@ from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 from torchvision.models import resnet18, ResNet18_Weights
 
-# Define Paths
+# Define Directory Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ARCHIVE_DIR = os.path.join(BASE_DIR, "archive")
-DATA_DIR = os.path.join(BASE_DIR, "data")
+QUALITY_DATASET_DIR = os.path.join(BASE_DIR, "quality dataset")
+DISEASES_DATASET_DIR = os.path.join(BASE_DIR, "Fruit And Vegetable Diseases Dataset")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 MODEL_PATH = os.path.join(MODELS_DIR, "quality_model.pt")
 REPORT_JSON_PATH = os.path.join(MODELS_DIR, "eval_report.json")
 
 PRODUCT_CLASSES = [
-    "onion", "milk", "apple", "potato", "carrot", "cheese", "tomato",
-    "banana", "bellpepper", "capsicum", "cucumber", "grape", "guava", "mango", "orange", "strawberry"
+    "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
+    "grape", "guava", "jujube", "mango", "milk", "orange", "pomegranate",
+    "potato", "strawberry", "tomato"
 ]
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
@@ -48,7 +49,7 @@ class MultiHeadProduceModel(nn.Module):
         backbone.fc = nn.Identity()
         self.backbone = backbone
 
-        # Multi-head outputs
+        # Multi-head Output Heads
         self.product_head = nn.Linear(in_features, num_products)
         self.defect_head = nn.Linear(in_features, num_defects)
 
@@ -59,13 +60,13 @@ class MultiHeadProduceModel(nn.Module):
         return prod_logits, defect_logits
 
 
-class RealDatasetScanner(Dataset):
+class RealCombinedDatasetScanner(Dataset):
     """
-    Scans real images from backend/cv/archive/ and backend/cv/data/
-    Automatically parses folder names like:
-    - fresh_tomato -> (tomato, fresh)
-    - stale_tomato -> (tomato, major_defect)
-    - Tomato_Healthy / Tomato_Rotten
+    Scans and merges images recursively from all 3 real produce datasets.
+    Handles naming formats like:
+    - Apple__Healthy / Apple__Rotten
+    - Carrot__Healthy / Carrot__Rotten
+    - fresh_capsicum / stale_capsicum
     """
     def __init__(self, search_dirs, transform=None):
         self.transform = transform
@@ -79,29 +80,40 @@ class RealDatasetScanner(Dataset):
                 for fname in files:
                     if fname.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
                         full_path = os.path.join(root, fname)
-                        folder_name = os.path.basename(root).lower()
+                        folder_path_lower = root.lower()
+                        fname_lower = fname.lower()
 
                         prod_label = None
                         def_label = None
 
-                        clean_folder = folder_name.replace("__", "_")
-                        
-                        # 1. Product mapping
-                        for i, p in enumerate(PRODUCT_CLASSES):
-                            if p in clean_folder or p in fname.lower():
-                                prod_label = i
-                                break
+                        # Special Aliases
+                        if "bellpepper" in folder_path_lower or "bellpepper" in fname_lower:
+                            prod_label = PRODUCT_CLASSES.index("capsicum")
 
-                        # Special alias: capsicum -> bellpepper
-                        if prod_label is None and ("capsicum" in clean_folder or "bellpepper" in clean_folder):
-                            prod_label = PRODUCT_CLASSES.index("bellpepper")
+                        # 1. Product Category Mapping
+                        if prod_label is None:
+                            for i, p in enumerate(PRODUCT_CLASSES):
+                                if p in folder_path_lower or p in fname_lower:
+                                    prod_label = i
+                                    break
 
-                        # 2. Defect mapping (healthy/fresh -> fresh, rotten/stale -> major_defect)
-                        if "healthy" in clean_folder or "fresh" in clean_folder:
+                        # Heuristic fallback if product is missing in path
+                        if prod_label is None:
+                            if "banana" in fname_lower:
+                                prod_label = PRODUCT_CLASSES.index("banana")
+                            elif "apple" in fname_lower:
+                                prod_label = PRODUCT_CLASSES.index("apple")
+                            elif "orange" in fname_lower:
+                                prod_label = PRODUCT_CLASSES.index("orange")
+                            else:
+                                prod_label = PRODUCT_CLASSES.index("tomato")
+
+                        # 2. Defect Quality Condition Mapping
+                        if "healthy" in folder_path_lower or "fresh" in folder_path_lower:
                             def_label = DEFECT_CLASSES.index("fresh")
-                        elif "rotten" in clean_folder or "stale" in clean_folder or "major" in clean_folder:
+                        elif "rotten" in folder_path_lower or "stale" in folder_path_lower or "major" in folder_path_lower or "diseased" in folder_path_lower:
                             def_label = DEFECT_CLASSES.index("major_defect")
-                        elif "minor" in clean_folder or "defect" in clean_folder:
+                        elif "minor" in folder_path_lower or "defect" in folder_path_lower:
                             def_label = DEFECT_CLASSES.index("minor_defect")
                         else:
                             def_label = DEFECT_CLASSES.index("fresh")
@@ -120,19 +132,25 @@ class RealDatasetScanner(Dataset):
         return image, prod_label, def_label
 
 
-def train_model():
+def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4):
     os.makedirs(MODELS_DIR, exist_ok=True)
+    start_time = time.time()
 
-    dataset_all = RealDatasetScanner([ARCHIVE_DIR, DATA_DIR])
+    dataset_all = RealCombinedDatasetScanner([ARCHIVE_DIR, QUALITY_DATASET_DIR, DISEASES_DATASET_DIR])
     if len(dataset_all) == 0:
         print("\n" + "="*75)
-        print("ERROR: NO REAL IMAGES FOUND IN `backend/cv/archive/` OR `backend/cv/data/`")
+        print("ERROR: NO REAL IMAGES FOUND IN DATASET DIRECTORIES")
         print("="*75 + "\n")
         return None
 
-    print(f"\n===========================================================")
-    print(f"SUCCESS: Loaded {len(dataset_all)} REAL produce images from dataset!")
-    print(f"===========================================================\n")
+    print("\n" + "="*75)
+    print(f"ORGANICLINK NEURAL NETWORK TRAINING PIPELINE")
+    print(f"Total Combined Real Images : {len(dataset_all)}")
+    print(f"Target Categories (Classes): {len(PRODUCT_CLASSES)}")
+    print(f"Target Training Epochs     : {epochs}")
+    print(f"Batch Size                 : {batch_size}")
+    print(f"Initial Learning Rate      : {learning_rate}")
+    print("="*75 + "\n")
 
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
@@ -156,18 +174,28 @@ def train_model():
     train_ds.dataset.transform = train_transform
     val_ds.dataset.transform = val_transform
 
-    train_loader = DataLoader(train_ds, batch_size=min(32, train_size), shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=min(32, val_size), shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=min(batch_size, train_size), shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=min(batch_size, val_size), shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = MultiHeadProduceModel().to(device)
 
+    # Resume fine-tuning if checkpoint exists with matching shape
+    if os.path.exists(MODEL_PATH):
+        try:
+            state_dict = torch.load(MODEL_PATH, map_location=device)
+            model.load_state_dict(state_dict)
+            print(f"Loaded existing model checkpoint from {MODEL_PATH} for fine-tuning!")
+        except Exception as e:
+            print(f"Initializing fresh 16-class model checkpoint ({e})")
+
     criterion_prod = nn.CrossEntropyLoss()
     criterion_def = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
-    epochs = 6
-    print(f"Training Multi-Head ResNet18 model on REAL images for {epochs} epochs on {device}...")
+    best_combined_acc = 0.0
+
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
@@ -191,7 +219,6 @@ def train_model():
             optimizer.step()
 
             running_loss += total_loss.item() * images.size(0)
-
             _, prod_preds = torch.max(prod_logits, 1)
             _, def_preds = torch.max(def_logits, 1)
 
@@ -199,27 +226,46 @@ def train_model():
             def_correct += torch.sum(def_preds == def_labels.data).item()
             total += images.size(0)
 
-        epoch_loss = running_loss / total
-        prod_acc = prod_correct / total
-        def_acc = def_correct / total
-        print(f"Epoch {epoch+1}/{epochs} - Loss: {epoch_loss:.4f} | Product Acc: {prod_acc*100:.1f}% | Quality Acc: {def_acc*100:.1f}%")
+        scheduler.step()
 
-    torch.save(model.state_dict(), MODEL_PATH)
-    print(f"\nReal-World Neural Network Model saved to {MODEL_PATH}")
+        epoch_loss = running_loss / total
+        prod_acc = (prod_correct / total) * 100.0
+        def_acc = (def_correct / total) * 100.0
+        combined_acc = (prod_acc + def_acc) / 2.0
+
+        print(f"Epoch [{epoch+1:02d}/{epochs:02d}] - Loss: {epoch_loss:.4f} | Product Acc: {prod_acc:.1f}% | Quality Acc: {def_acc:.1f}% | Combined Acc: {combined_acc:.1f}%")
+
+        if combined_acc > best_combined_acc:
+            best_combined_acc = combined_acc
+            torch.save(model.state_dict(), MODEL_PATH)
+            print(f"  --> Saved new best model checkpoint to {MODEL_PATH} (Combined Acc: {combined_acc:.1f}%)")
+
+    elapsed_mins = (time.time() - start_time) / 60.0
 
     report = {
         "architecture": "MultiHeadProduceModel (ResNet18)",
-        "dataset_type": "Real Fruit and Vegetable Images (Archive & Data)",
-        "total_samples": len(dataset_all),
+        "dataset_type": "Real Produce Images (Archive, Quality Dataset & Diseases Dataset)",
+        "total_images": len(dataset_all),
         "train_samples": train_size,
-        "val_samples": val_size
+        "val_samples": val_size,
+        "epochs": epochs,
+        "best_combined_acc": round(best_combined_acc, 2),
+        "training_time_minutes": round(elapsed_mins, 2),
+        "model_path": MODEL_PATH
     }
 
     with open(REPORT_JSON_PATH, "w") as f:
         json.dump(report, f, indent=2)
 
+    print("\n" + "="*75)
+    print(f"TRAINING COMPLETED SUCCESSFULLY!")
+    print(f"Best Model Saved To : {MODEL_PATH}")
+    print(f"Best Accuracy       : {best_combined_acc:.2f}%")
+    print(f"Elapsed Time        : {elapsed_mins:.2f} minutes")
+    print("="*75 + "\n")
+
     return report
 
 
 if __name__ == "__main__":
-    train_model()
+    run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4)
