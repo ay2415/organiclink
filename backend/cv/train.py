@@ -1,26 +1,36 @@
 """
-Production Deep Learning Neural Network Training Pipeline for OrganicLink.
-Scans and fine-tunes Multi-Head ResNet18 across all 3 real produce datasets (44,300+ Images):
-1. `backend/cv/archive/`
-2. `backend/cv/quality dataset/`
-3. `backend/cv/Fruit And Vegetable Diseases Dataset/`
+FIXED Training Pipeline for OrganicLink produce quality + product verification.
 
-Supported Categories (16 classes):
-- apple, banana, bitter_gourd, capsicum, carrot, cucumber, grape, guava, jujube, mango, milk, orange, pomegranate, potato, strawberry, tomato
+Fixes applied vs the previous version:
+  1. Transform leak fixed - train and val now genuinely use different transforms.
+  2. Real validation loop added (previously val_loader was never used).
+  3. Per-class precision / recall / F1 + confusion matrix written to eval_report.
+  4. Best checkpoint selected on VALIDATION accuracy, not training accuracy.
+  5. Strict label parsing - unmatched images are SKIPPED, not silently
+     relabelled as "fresh tomato".
+  6. Product parsed from the immediate folder name, not the whole absolute path.
+  7. "milk" removed from PRODUCT_CLASSES (no images; milk is not CV-graded).
+  8. Class-imbalance handling via weighted loss.
+  9. Fresh checkpoints by default (no silent resume from a bad model).
 """
 
 import os
 import json
 import time
+import warnings
+from collections import Counter
+
+import numpy as np
 from PIL import Image
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 import torchvision.transforms as transforms
 from torchvision.models import resnet18, ResNet18_Weights
 
-# Define Directory Paths
+warnings.filterwarnings("ignore", category=UserWarning, module="PIL")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ARCHIVE_DIR = os.path.join(BASE_DIR, "archive")
 QUALITY_DATASET_DIR = os.path.join(BASE_DIR, "quality dataset")
@@ -28,98 +38,134 @@ DISEASES_DATASET_DIR = os.path.join(BASE_DIR, "Fruit And Vegetable Diseases Data
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 MODEL_PATH = os.path.join(MODELS_DIR, "quality_model.pt")
 REPORT_JSON_PATH = os.path.join(MODELS_DIR, "eval_report.json")
+REPORT_TXT_PATH = os.path.join(MODELS_DIR, "eval_report.txt")
 
+# NOTE: "milk" removed - no training images exist and milk is never CV-graded.
+# "onion" is NOT here because the Diseases dataset contains no onion images.
+# Add "onion" ONLY after you add real onion photos under an Onion__Healthy /
+# Onion__Rotten folder structure. Until then the app must not offer CV grading
+# for onion.
 PRODUCT_CLASSES = [
     "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
-    "grape", "guava", "jujube", "mango", "milk", "orange", "pomegranate",
-    "potato", "strawberry", "tomato"
+    "grape", "guava", "jujube", "mango", "orange", "pomegranate",
+    "potato", "strawberry", "tomato",
 ]
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
+
+# Folder-name aliases -> canonical product
+PRODUCT_ALIASES = {
+    "bellpepper": "capsicum",
+    "bell_pepper": "capsicum",
+    "pepper": "capsicum",
+    "bittergourd": "bitter_gourd",
+    "bitter gourd": "bitter_gourd",
+    "grapes": "grape",
+    "tomatoes": "tomato",
+    "carrots": "carrot",
+    "potatoes": "potato",
+    "oranges": "orange",
+    "apples": "apple",
+    "bananas": "banana",
+    "strawberries": "strawberry",
+}
+
+FRESH_KEYWORDS = ("healthy", "fresh", "good")
+MAJOR_KEYWORDS = ("rotten", "stale", "spoiled", "diseased", "bad", "major")
+MINOR_KEYWORDS = ("minor", "moderate", "slight")
 
 
 class MultiHeadProduceModel(nn.Module):
     def __init__(self, num_products=len(PRODUCT_CLASSES), num_defects=len(DEFECT_CLASSES)):
         super().__init__()
-        try:
-            backbone = resnet18(weights=ResNet18_Weights.DEFAULT)
-        except Exception:
-            backbone = resnet18(pretrained=True)
-            
+        backbone = resnet18(weights=ResNet18_Weights.DEFAULT)
         in_features = backbone.fc.in_features
         backbone.fc = nn.Identity()
         self.backbone = backbone
-
-        # Multi-head Output Heads
         self.product_head = nn.Linear(in_features, num_products)
         self.defect_head = nn.Linear(in_features, num_defects)
 
     def forward(self, x):
         features = self.backbone(x)
-        prod_logits = self.product_head(features)
-        defect_logits = self.defect_head(features)
-        return prod_logits, defect_logits
+        return self.product_head(features), self.defect_head(features)
 
 
-class RealCombinedDatasetScanner(Dataset):
+def parse_labels_from_folder(folder_name: str):
     """
-    Scans and merges images recursively from all 3 real produce datasets.
-    Handles naming formats like:
-    - Apple__Healthy / Apple__Rotten
-    - Carrot__Healthy / Carrot__Rotten
-    - fresh_capsicum / stale_capsicum
+    Parse (product, defect) from the IMMEDIATE folder name only.
+
+    Returns (product_index, defect_index) or (None, None) if unparseable.
+    Unparseable samples are SKIPPED - never silently relabelled.
     """
+    name = folder_name.lower().replace("-", "_").replace("  ", " ").strip()
+
+    # --- product ---
+    product_idx = None
+    for alias, canonical in PRODUCT_ALIASES.items():
+        if alias in name:
+            product_idx = PRODUCT_CLASSES.index(canonical)
+            break
+    if product_idx is None:
+        # Longest match first so "bitter_gourd" beats nothing and
+        # short names don't win by accident.
+        for p in sorted(PRODUCT_CLASSES, key=len, reverse=True):
+            if p in name or p.replace("_", " ") in name:
+                product_idx = PRODUCT_CLASSES.index(p)
+                break
+    if product_idx is None:
+        return None, None
+
+    # --- defect condition ---
+    defect_idx = None
+    if any(k in name for k in MINOR_KEYWORDS):
+        defect_idx = DEFECT_CLASSES.index("minor_defect")
+    elif any(k in name for k in MAJOR_KEYWORDS):
+        defect_idx = DEFECT_CLASSES.index("major_defect")
+    elif any(k in name for k in FRESH_KEYWORDS):
+        defect_idx = DEFECT_CLASSES.index("fresh")
+
+    if defect_idx is None:
+        return None, None
+
+    return product_idx, defect_idx
+
+
+class ProduceDataset(Dataset):
+    """Scans dataset roots and keeps ONLY samples whose labels parse cleanly."""
+
     def __init__(self, search_dirs, transform=None):
         self.transform = transform
         self.samples = []
+        self.skipped = 0
+        skipped_folders = Counter()
 
         for target_dir in search_dirs:
             if not os.path.exists(target_dir):
+                print(f"  [warn] dataset dir not found, skipping: {target_dir}")
                 continue
 
-            for root, dirs, files in os.walk(target_dir):
-                for fname in files:
-                    if fname.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-                        full_path = os.path.join(root, fname)
-                        folder_path_lower = root.lower()
-                        fname_lower = fname.lower()
+            for root, _dirs, files in os.walk(target_dir):
+                image_files = [f for f in files
+                               if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
+                if not image_files:
+                    continue
 
-                        prod_label = None
-                        def_label = None
+                folder_name = os.path.basename(root)
+                prod_idx, def_idx = parse_labels_from_folder(folder_name)
 
-                        # Special Aliases
-                        if "bellpepper" in folder_path_lower or "bellpepper" in fname_lower:
-                            prod_label = PRODUCT_CLASSES.index("capsicum")
+                if prod_idx is None or def_idx is None:
+                    self.skipped += len(image_files)
+                    skipped_folders[folder_name] += len(image_files)
+                    continue
 
-                        # 1. Product Category Mapping
-                        if prod_label is None:
-                            for i, p in enumerate(PRODUCT_CLASSES):
-                                if p in folder_path_lower or p in fname_lower:
-                                    prod_label = i
-                                    break
+                for fname in image_files:
+                    self.samples.append((os.path.join(root, fname), prod_idx, def_idx))
 
-                        # Heuristic fallback if product is missing in path
-                        if prod_label is None:
-                            if "banana" in fname_lower:
-                                prod_label = PRODUCT_CLASSES.index("banana")
-                            elif "apple" in fname_lower:
-                                prod_label = PRODUCT_CLASSES.index("apple")
-                            elif "orange" in fname_lower:
-                                prod_label = PRODUCT_CLASSES.index("orange")
-                            else:
-                                prod_label = PRODUCT_CLASSES.index("tomato")
-
-                        # 2. Defect Quality Condition Mapping
-                        if "healthy" in folder_path_lower or "fresh" in folder_path_lower:
-                            def_label = DEFECT_CLASSES.index("fresh")
-                        elif "rotten" in folder_path_lower or "stale" in folder_path_lower or "major" in folder_path_lower or "diseased" in folder_path_lower:
-                            def_label = DEFECT_CLASSES.index("major_defect")
-                        elif "minor" in folder_path_lower or "defect" in folder_path_lower:
-                            def_label = DEFECT_CLASSES.index("minor_defect")
-                        else:
-                            def_label = DEFECT_CLASSES.index("fresh")
-
-                        if prod_label is not None:
-                            self.samples.append((full_path, prod_label, def_label))
+        if skipped_folders:
+            print("\n  Skipped folders (labels could not be parsed):")
+            for folder, count in skipped_folders.most_common(20):
+                print(f"    {folder}: {count} images")
+            print("  -> If any of these are real data, add them to "
+                  "PRODUCT_ALIASES or the keyword lists.\n")
 
     def __len__(self):
         return len(self.samples)
@@ -131,76 +177,183 @@ class RealCombinedDatasetScanner(Dataset):
             image = self.transform(image)
         return image, prod_label, def_label
 
+    def label_distribution(self):
+        prod_counts = Counter(s[1] for s in self.samples)
+        def_counts = Counter(s[2] for s in self.samples)
+        return prod_counts, def_counts
 
-def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4):
+
+class TransformSubset(Subset):
+    """
+    Subset that applies its OWN transform.
+
+    This is the fix for the transform leak: previously both subsets shared
+    one underlying dataset object, so setting val_transform silently
+    overwrote train_transform and augmentation never ran.
+    """
+
+    def __init__(self, dataset, indices, transform):
+        super().__init__(dataset, indices)
+        self.transform = transform
+
+    def __getitem__(self, idx):
+        path, prod_label, def_label = self.dataset.samples[self.indices[idx]]
+        image = Image.open(path).convert("RGB")
+        if self.transform:
+            image = self.transform(image)
+        return image, prod_label, def_label
+
+
+def compute_metrics(y_true, y_pred, class_names):
+    """Per-class precision / recall / F1 + confusion matrix. No sklearn needed."""
+    n = len(class_names)
+    cm = np.zeros((n, n), dtype=int)
+    for t, p in zip(y_true, y_pred):
+        cm[t][p] += 1
+
+    per_class = {}
+    for i, name in enumerate(class_names):
+        tp = cm[i][i]
+        fp = cm[:, i].sum() - tp
+        fn = cm[i, :].sum() - tp
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+        per_class[name] = {
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(f1, 4),
+            "support": int(cm[i, :].sum()),
+        }
+
+    accuracy = float(np.trace(cm) / cm.sum()) if cm.sum() else 0.0
+    macro_f1 = float(np.mean([v["f1"] for v in per_class.values()]))
+    return {
+        "accuracy": round(accuracy, 4),
+        "macro_f1": round(macro_f1, 4),
+        "per_class": per_class,
+        "confusion_matrix": cm.tolist(),
+        "class_names": class_names,
+    }
+
+
+def format_confusion_matrix(cm, class_names):
+    width = max(len(c) for c in class_names) + 2
+    lines = [" " * width + "".join(f"{c[:6]:>8}" for c in class_names)]
+    for i, name in enumerate(class_names):
+        lines.append(f"{name:<{width}}" + "".join(f"{v:>8}" for v in cm[i]))
+    return "\n".join(lines)
+
+
+@torch.no_grad()
+def evaluate(model, loader, device):
+    model.eval()
+    prod_true, prod_pred, def_true, def_pred = [], [], [], []
+    for images, prod_labels, def_labels in loader:
+        images = images.to(device)
+        prod_logits, def_logits = model(images)
+        prod_pred.extend(torch.argmax(prod_logits, 1).cpu().tolist())
+        def_pred.extend(torch.argmax(def_logits, 1).cpu().tolist())
+        prod_true.extend(prod_labels.tolist())
+        def_true.extend(def_labels.tolist())
+    return prod_true, prod_pred, def_true, def_pred
+
+
+def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4, resume=False):
     os.makedirs(MODELS_DIR, exist_ok=True)
     start_time = time.time()
 
-    dataset_all = RealCombinedDatasetScanner([ARCHIVE_DIR, QUALITY_DATASET_DIR, DISEASES_DATASET_DIR])
-    if len(dataset_all) == 0:
-        print("\n" + "="*75)
-        print("ERROR: NO REAL IMAGES FOUND IN DATASET DIRECTORIES")
-        print("="*75 + "\n")
+    print("\n" + "=" * 75)
+    print("ORGANICLINK TRAINING PIPELINE (FIXED)")
+    print("=" * 75)
+
+    full_dataset = ProduceDataset(
+        [ARCHIVE_DIR, QUALITY_DATASET_DIR, DISEASES_DATASET_DIR]
+    )
+
+    if len(full_dataset) == 0:
+        print("ERROR: no usable images found. Check dataset paths and folder naming.")
         return None
 
-    print("\n" + "="*75)
-    print(f"ORGANICLINK NEURAL NETWORK TRAINING PIPELINE")
-    print(f"Total Combined Real Images : {len(dataset_all)}")
-    print(f"Target Categories (Classes): {len(PRODUCT_CLASSES)}")
-    print(f"Target Training Epochs     : {epochs}")
-    print(f"Batch Size                 : {batch_size}")
-    print(f"Initial Learning Rate      : {learning_rate}")
-    print("="*75 + "\n")
+    prod_counts, def_counts = full_dataset.label_distribution()
+    print(f"Usable images : {len(full_dataset)}")
+    print(f"Skipped images: {full_dataset.skipped}")
+    print("\nProduct distribution:")
+    for idx, count in sorted(prod_counts.items()):
+        print(f"  {PRODUCT_CLASSES[idx]:<15} {count}")
+    print("\nQuality distribution:")
+    for idx, count in sorted(def_counts.items()):
+        print(f"  {DEFECT_CLASSES[idx]:<15} {count}")
+
+    missing = [PRODUCT_CLASSES[i] for i in range(len(PRODUCT_CLASSES))
+               if prod_counts.get(i, 0) == 0]
+    if missing:
+        print(f"\n  [warn] classes with ZERO images: {missing}")
+        print("  These can never be predicted correctly. Remove them from "
+              "PRODUCT_CLASSES or add data.\n")
 
     train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+        transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
         transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(15),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+        transforms.RandomVerticalFlip(p=0.2),
+        transforms.RandomRotation(20),
+        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.05),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
+    # IMPORTANT: inference.py must use EXACTLY this transform.
     val_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    val_size = max(1, int(len(dataset_all) * 0.2))
-    train_size = len(dataset_all) - val_size
-    train_ds, val_ds = torch.utils.data.random_split(dataset_all, [train_size, val_size])
+    indices = np.random.RandomState(42).permutation(len(full_dataset))
+    val_size = max(1, int(len(full_dataset) * 0.2))
+    val_indices = indices[:val_size].tolist()
+    train_indices = indices[val_size:].tolist()
 
-    train_ds.dataset.transform = train_transform
-    val_ds.dataset.transform = val_transform
+    train_ds = TransformSubset(full_dataset, train_indices, train_transform)
+    val_ds = TransformSubset(full_dataset, val_indices, val_transform)
 
-    train_loader = DataLoader(train_ds, batch_size=min(batch_size, train_size), shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=min(batch_size, val_size), shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
+
+    print(f"\nTrain: {len(train_ds)}   Val: {len(val_ds)}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}\n")
     model = MultiHeadProduceModel().to(device)
 
-    # Resume fine-tuning if checkpoint exists with matching shape
-    if os.path.exists(MODEL_PATH):
+    if resume and os.path.exists(MODEL_PATH):
         try:
-            state_dict = torch.load(MODEL_PATH, map_location=device)
-            model.load_state_dict(state_dict)
-            print(f"Loaded existing model checkpoint from {MODEL_PATH} for fine-tuning!")
+            model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+            print("Resumed from existing checkpoint.")
         except Exception as e:
-            print(f"Initializing fresh 16-class model checkpoint ({e})")
+            print(f"Could not resume ({e}); starting fresh.")
 
-    criterion_prod = nn.CrossEntropyLoss()
-    criterion_def = nn.CrossEntropyLoss()
+    # Class weights so rare classes are not ignored
+    prod_weights = torch.tensor(
+        [len(full_dataset) / (len(PRODUCT_CLASSES) * max(prod_counts.get(i, 1), 1))
+         for i in range(len(PRODUCT_CLASSES))], dtype=torch.float32
+    ).to(device)
+    def_weights = torch.tensor(
+        [len(full_dataset) / (len(DEFECT_CLASSES) * max(def_counts.get(i, 1), 1))
+         for i in range(len(DEFECT_CLASSES))], dtype=torch.float32
+    ).to(device)
+
+    criterion_prod = nn.CrossEntropyLoss(weight=prod_weights)
+    criterion_def = nn.CrossEntropyLoss(weight=def_weights)
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
-    best_combined_acc = 0.0
+    best_val_score = 0.0
+    history = []
 
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
-        prod_correct = 0
-        def_correct = 0
         total = 0
 
         for images, prod_labels, def_labels in train_loader:
@@ -210,62 +363,114 @@ def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4):
 
             optimizer.zero_grad()
             prod_logits, def_logits = model(images)
-
-            loss_prod = criterion_prod(prod_logits, prod_labels)
-            loss_def = criterion_def(def_logits, def_labels)
-            total_loss = loss_prod + loss_def
-
-            total_loss.backward()
+            loss = criterion_prod(prod_logits, prod_labels) + criterion_def(def_logits, def_labels)
+            loss.backward()
             optimizer.step()
 
-            running_loss += total_loss.item() * images.size(0)
-            _, prod_preds = torch.max(prod_logits, 1)
-            _, def_preds = torch.max(def_logits, 1)
-
-            prod_correct += torch.sum(prod_preds == prod_labels.data).item()
-            def_correct += torch.sum(def_preds == def_labels.data).item()
+            running_loss += loss.item() * images.size(0)
             total += images.size(0)
 
         scheduler.step()
+        train_loss = running_loss / total
 
-        epoch_loss = running_loss / total
-        prod_acc = (prod_correct / total) * 100.0
-        def_acc = (def_correct / total) * 100.0
-        combined_acc = (prod_acc + def_acc) / 2.0
+        # --- REAL validation ---
+        prod_true, prod_pred, def_true, def_pred = evaluate(model, val_loader, device)
+        prod_metrics = compute_metrics(prod_true, prod_pred, PRODUCT_CLASSES)
+        def_metrics = compute_metrics(def_true, def_pred, DEFECT_CLASSES)
 
-        print(f"Epoch [{epoch+1:02d}/{epochs:02d}] - Loss: {epoch_loss:.4f} | Product Acc: {prod_acc:.1f}% | Quality Acc: {def_acc:.1f}% | Combined Acc: {combined_acc:.1f}%")
+        val_score = (prod_metrics["accuracy"] + def_metrics["accuracy"]) / 2 * 100
 
-        if combined_acc > best_combined_acc:
-            best_combined_acc = combined_acc
+        print(f"Epoch [{epoch+1:02d}/{epochs:02d}] loss {train_loss:.4f} | "
+              f"VAL product {prod_metrics['accuracy']*100:.1f}% | "
+              f"VAL quality {def_metrics['accuracy']*100:.1f}% | "
+              f"combined {val_score:.1f}%")
+
+        history.append({
+            "epoch": epoch + 1,
+            "train_loss": round(train_loss, 4),
+            "val_product_acc": prod_metrics["accuracy"],
+            "val_quality_acc": def_metrics["accuracy"],
+        })
+
+        if val_score > best_val_score:
+            best_val_score = val_score
             torch.save(model.state_dict(), MODEL_PATH)
-            print(f"  --> Saved new best model checkpoint to {MODEL_PATH} (Combined Acc: {combined_acc:.1f}%)")
+            print(f"   -> saved best checkpoint (val {val_score:.1f}%)")
 
-    elapsed_mins = (time.time() - start_time) / 60.0
+    # Final evaluation with the best weights
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    prod_true, prod_pred, def_true, def_pred = evaluate(model, val_loader, device)
+    prod_metrics = compute_metrics(prod_true, prod_pred, PRODUCT_CLASSES)
+    def_metrics = compute_metrics(def_true, def_pred, DEFECT_CLASSES)
+
+    elapsed = (time.time() - start_time) / 60.0
 
     report = {
-        "architecture": "MultiHeadProduceModel (ResNet18)",
-        "dataset_type": "Real Produce Images (Archive, Quality Dataset & Diseases Dataset)",
-        "total_images": len(dataset_all),
-        "train_samples": train_size,
-        "val_samples": val_size,
+        "architecture": "MultiHeadProduceModel (ResNet18, ImageNet pretrained)",
+        "total_images": len(full_dataset),
+        "skipped_images": full_dataset.skipped,
+        "train_samples": len(train_ds),
+        "val_samples": len(val_ds),
         "epochs": epochs,
-        "best_combined_acc": round(best_combined_acc, 2),
-        "training_time_minutes": round(elapsed_mins, 2),
-        "model_path": MODEL_PATH
+        "training_time_minutes": round(elapsed, 2),
+        "product_metrics": prod_metrics,
+        "quality_metrics": def_metrics,
+        "history": history,
+        "note": "All reported metrics are VALIDATION metrics on a held-out 20% split.",
     }
 
     with open(REPORT_JSON_PATH, "w") as f:
         json.dump(report, f, indent=2)
 
-    print("\n" + "="*75)
-    print(f"TRAINING COMPLETED SUCCESSFULLY!")
-    print(f"Best Model Saved To : {MODEL_PATH}")
-    print(f"Best Accuracy       : {best_combined_acc:.2f}%")
-    print(f"Elapsed Time        : {elapsed_mins:.2f} minutes")
-    print("="*75 + "\n")
+    lines = [
+        "ORGANICLINK EVALUATION REPORT",
+        "=" * 60,
+        f"Images (usable): {len(full_dataset)}   skipped: {full_dataset.skipped}",
+        f"Train: {len(train_ds)}   Validation: {len(val_ds)}",
+        f"Epochs: {epochs}   Time: {elapsed:.1f} min",
+        "",
+        "ALL METRICS BELOW ARE ON THE HELD-OUT VALIDATION SPLIT.",
+        "",
+        "-" * 60,
+        "PRODUCT CLASSIFICATION",
+        "-" * 60,
+        f"Accuracy: {prod_metrics['accuracy']*100:.2f}%   Macro F1: {prod_metrics['macro_f1']:.4f}",
+        "",
+        f"{'class':<16}{'precision':>11}{'recall':>9}{'f1':>8}{'support':>9}",
+    ]
+    for name, m in prod_metrics["per_class"].items():
+        lines.append(f"{name:<16}{m['precision']:>11.4f}{m['recall']:>9.4f}"
+                     f"{m['f1']:>8.4f}{m['support']:>9}")
+    lines += [
+        "",
+        "Confusion matrix (rows = true, cols = predicted):",
+        format_confusion_matrix(prod_metrics["confusion_matrix"], PRODUCT_CLASSES),
+        "",
+        "-" * 60,
+        "QUALITY GRADING",
+        "-" * 60,
+        f"Accuracy: {def_metrics['accuracy']*100:.2f}%   Macro F1: {def_metrics['macro_f1']:.4f}",
+        "",
+        f"{'class':<16}{'precision':>11}{'recall':>9}{'f1':>8}{'support':>9}",
+    ]
+    for name, m in def_metrics["per_class"].items():
+        lines.append(f"{name:<16}{m['precision']:>11.4f}{m['recall']:>9.4f}"
+                     f"{m['f1']:>8.4f}{m['support']:>9}")
+    lines += [
+        "",
+        "Confusion matrix (rows = true, cols = predicted):",
+        format_confusion_matrix(def_metrics["confusion_matrix"], DEFECT_CLASSES),
+    ]
+
+    with open(REPORT_TXT_PATH, "w") as f:
+        f.write("\n".join(lines))
+
+    print("\n" + "\n".join(lines[:8]))
+    print(f"\nFull report: {REPORT_TXT_PATH}")
+    print(f"Model saved: {MODEL_PATH}\n")
 
     return report
 
 
 if __name__ == "__main__":
-    run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4)
+    run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4, resume=False)

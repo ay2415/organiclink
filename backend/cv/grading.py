@@ -1,6 +1,29 @@
 """
-Grading and Variance calculation logic for OrganicLink produce quality assessment.
+Grading and variance logic for OrganicLink produce quality assessment.
+
+CHANGE vs the previous version:
+  defect_coverage_percent has been REMOVED from the score.
+
+  Why: it measured "pixels darker than the local median", which on real
+  produce photographs captures specular highlights, shadows, stems and
+  background as readily as it captures actual blemishes. A glossy healthy
+  apple produced HIGH coverage (punished) while a uniformly brown rotten
+  apple produced LOW coverage (rewarded) - inverting the grade.
+
+  The trained classifier is now the dominant term (80%), with colour as a
+  small explainability contribution (20%). defect_coverage is still computed
+  and shown in the UI as a diagnostic, but it no longer affects the score.
 """
+
+# Score weighting
+W_CLASSIFIER = 0.80
+W_COLOUR = 0.20
+
+# Score assigned to each condition class when it has full probability mass
+SCORE_FRESH = 100.0
+SCORE_MINOR = 55.0
+SCORE_MAJOR = 8.0
+
 
 def compute_quality_score(
     prob_fresh: float,
@@ -8,46 +31,61 @@ def compute_quality_score(
     prob_major: float,
     colour_vibrancy: float,
     colour_uniformity: float,
-    defect_coverage_percent: float
 ) -> float:
     """
-    Computes overall explainable quality score (0-100) from PyTorch classification probabilities
-    and OpenCV extracted visual features.
+    Overall quality score (0-100), dominated by the trained classifier.
+
+    prob_* are softmax probabilities from the defect head (they sum to 1).
+    colour_* are 0-100 OpenCV sub-metrics used as a minor, explainable
+    adjustment - they cannot by themselves flip a grade.
     """
-    class_component = 100.0 * prob_fresh + 60.0 * prob_minor + 20.0 * prob_major
-    defect_component = max(0.0, 100.0 - (defect_coverage_percent * 2.0))
+    total = prob_fresh + prob_minor + prob_major
+    if total > 0:
+        prob_fresh /= total
+        prob_minor /= total
+        prob_major /= total
+
+    class_component = (
+        SCORE_FRESH * prob_fresh
+        + SCORE_MINOR * prob_minor
+        + SCORE_MAJOR * prob_major
+    )
+
     colour_component = 0.6 * colour_vibrancy + 0.4 * colour_uniformity
 
-    quality_score = (
-        0.60 * class_component +
-        0.25 * defect_component +
-        0.15 * colour_component
-    )
+    quality_score = W_CLASSIFIER * class_component + W_COLOUR * colour_component
     return round(max(0.0, min(100.0, quality_score)), 2)
 
 
 def score_to_grade(quality_score: float) -> str:
     """
-    Maps quality score to letter grade:
-    >= 85: Grade A (Premium)
-    70-84: Grade B (Good)
-    50-69: Grade C (Fair)
-    < 50: Grade R (Reject)
+    >= 85 : A (Premium)
+    70-84 : B (Good)
+    50-69 : C (Fair)
+    < 50  : R (Reject)
     """
     if quality_score >= 85.0:
         return "A"
-    elif quality_score >= 70.0:
+    if quality_score >= 70.0:
         return "B"
-    elif quality_score >= 50.0:
+    if quality_score >= 50.0:
         return "C"
-    else:
-        return "R"
+    return "R"
 
 
-def compute_variance(farm_score: float, delivery_score: float, tolerance_percent: float = 10.0) -> dict:
+def compute_variance(farm_score: float,
+                     delivery_score: float,
+                     tolerance_percent: float = 10.0) -> dict:
     """
-    Computes quality score variance between farm inspection and delivery inspection.
-    variance_percent = ((farm_score - delivery_score) / farm_score) * 100
+    Quality variance between the farm inspection and the delivery inspection.
+
+        variance_percent = ((farm_score - delivery_score) / farm_score) * 100
+
+    Positive variance means quality DROPPED in transit.
+
+    The tolerance band exists because the two photographs are taken by two
+    different people, on two different devices, under two different lighting
+    conditions. Some difference is measurement noise, not real quality loss.
     """
     if farm_score <= 0:
         variance_percent = 0.0
@@ -56,24 +94,19 @@ def compute_variance(farm_score: float, delivery_score: float, tolerance_percent
 
     variance_percent = round(variance_percent, 2)
 
-    # Check against tolerance threshold
     if abs(variance_percent) <= tolerance_percent:
-        acceptable = True
-        dispute_required = False
-        anomaly = False
+        acceptable, dispute_required, anomaly = True, False, False
     elif variance_percent > tolerance_percent:
-        acceptable = False
-        dispute_required = True
-        anomaly = False
+        # Quality dropped beyond tolerance
+        acceptable, dispute_required, anomaly = False, True, False
     else:
-        # delivery score is materially higher than farm score (> tolerance_percent higher)
-        acceptable = True
-        dispute_required = False
-        anomaly = True
+        # Delivery scored materially HIGHER than farm. Not a dispute - usually
+        # inconsistent photo conditions rather than produce improving.
+        acceptable, dispute_required, anomaly = True, False, True
 
     return {
         "variance_percent": variance_percent,
         "variance_acceptable": acceptable,
         "dispute_flag": dispute_required,
-        "is_anomaly": anomaly
+        "is_anomaly": anomaly,
     }

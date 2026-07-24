@@ -116,14 +116,14 @@ const FarmerNewListing = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div>
               <label className="font-bold text-gray-700 block mb-1">Product Type</label>
-              <select 
-                value={productType} 
-                onChange={e=>{
-                  setProductType(e.target.value); 
+              <select
+                value={productType}
+                onChange={e => {
+                  setProductType(e.target.value);
                   setQuantityUnit(e.target.value === 'milk' ? 'litre' : 'kg');
                   setCvResult(null);
                   setError('');
-                }} 
+                }}
                 className="w-full border p-2.5 rounded-lg font-semibold"
               >
                 <option value="apple">Organic Apple</option>
@@ -133,27 +133,28 @@ const FarmerNewListing = () => {
                 <option value="milk">Organic Raw Milk</option>
                 <option value="orange">Organic Orange</option>
                 <option value="tomato">Organic Tomato</option>
+                <option value="carrot">Organic Carrot</option>
               </select>
             </div>
 
             <div>
               <label className="font-bold text-gray-700 block mb-1">Variety / Batch Name</label>
-              <input type="text" value={variety} onChange={e=>setVariety(e.target.value)} className="w-full border p-2.5 rounded-lg" />
+              <input type="text" value={variety} onChange={e => setVariety(e.target.value)} className="w-full border p-2.5 rounded-lg" />
             </div>
 
             <div>
               <label className="font-bold text-gray-700 block mb-1">Harvest / Harvest Date</label>
-              <input type="date" value={productionDate} onChange={e=>setProductionDate(e.target.value)} className="w-full border p-2.5 rounded-lg" />
+              <input type="date" value={productionDate} onChange={e => setProductionDate(e.target.value)} className="w-full border p-2.5 rounded-lg" />
             </div>
 
             <div>
               <label className="font-bold text-gray-700 block mb-1">Available Surplus Quantity</label>
-              <input type="number" step="0.5" value={availableQuantity} onChange={e=>setAvailableQuantity(parseFloat(e.target.value))} className="w-full border p-2.5 rounded-lg font-bold text-emerald-800" />
+              <input type="number" step="0.5" value={availableQuantity} onChange={e => setAvailableQuantity(parseFloat(e.target.value))} className="w-full border p-2.5 rounded-lg font-bold text-emerald-800" />
             </div>
 
             <div>
               <label className="font-bold text-gray-700 block mb-1">Quantity Unit</label>
-              <select value={quantityUnit} onChange={e=>setQuantityUnit(e.target.value)} className="w-full border p-2.5 rounded-lg">
+              <select value={quantityUnit} onChange={e => setQuantityUnit(e.target.value)} className="w-full border p-2.5 rounded-lg">
                 <option value="kg">kilograms (kg)</option>
                 <option value="litre">litres (L)</option>
                 <option value="box">crates / boxes</option>
@@ -162,17 +163,17 @@ const FarmerNewListing = () => {
 
             <div>
               <label className="font-bold text-gray-700 block mb-1">Price per Unit (€)</label>
-              <input type="number" step="0.05" value={pricePerUnit} onChange={e=>setPricePerUnit(parseFloat(e.target.value))} className="w-full border p-2.5 rounded-lg font-bold" />
+              <input type="number" step="0.05" value={pricePerUnit} onChange={e => setPricePerUnit(parseFloat(e.target.value))} className="w-full border p-2.5 rounded-lg font-bold" />
             </div>
 
             <div>
               <label className="font-bold text-gray-700 block mb-1">Hours Active</label>
-              <input type="number" step="1" value={hoursActive} onChange={e=>setHoursActive(parseInt(e.target.value))} className="w-full border p-2.5 rounded-lg" />
+              <input type="number" step="1" value={hoursActive} onChange={e => setHoursActive(parseInt(e.target.value))} className="w-full border p-2.5 rounded-lg" />
             </div>
           </div>
 
           <div className="flex items-center gap-2 pt-2">
-            <input type="checkbox" id="transport" checked={providesTransport} onChange={e=>setProvidesTransport(e.target.checked)} className="rounded text-emerald-600 focus:ring-emerald-500" />
+            <input type="checkbox" id="transport" checked={providesTransport} onChange={e => setProvidesTransport(e.target.checked)} className="rounded text-emerald-600 focus:ring-emerald-500" />
             <label htmlFor="transport" className="text-xs font-semibold text-gray-700">Farm offers delivery transport across Ireland</label>
           </div>
         </div>
