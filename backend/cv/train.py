@@ -203,6 +203,9 @@ class TransformSubset(Subset):
             image = self.transform(image)
         return image, prod_label, def_label
 
+    def __getitems__(self, indices):
+        return [self.__getitem__(idx) for idx in indices]
+
 
 def compute_metrics(y_true, y_pred, class_names):
     """Per-class precision / recall / F1 + confusion matrix. No sklearn needed."""
