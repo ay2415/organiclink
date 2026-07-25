@@ -320,8 +320,8 @@ def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4, resume=F
     train_ds = TransformSubset(full_dataset, train_indices, train_transform)
     val_ds = TransformSubset(full_dataset, val_indices, val_transform)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
     print(f"\nTrain: {len(train_ds)}   Val: {len(val_ds)}")
 
