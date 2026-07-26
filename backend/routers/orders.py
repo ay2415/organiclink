@@ -343,8 +343,11 @@ def upload_delivery_inspection_photo(
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.id != order.buyer_id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only buyer can upload delivery inspection photo")
 
-    # All permissions granted: allow any authenticated user to complete delivery quality verification
+    if order.status != "in_transit":
+        raise HTTPException(status_code=409, detail=f"Delivery inspection requires status 'in_transit', current is '{order.status}'")
 
     # 1. Save delivery image
     ext = os.path.splitext(image.filename)[1] or ".jpg"
@@ -402,11 +405,7 @@ def upload_delivery_inspection_photo(
 
     # 2. Run CV Analysis on delivery image for gradable produce
     engine = get_inference_engine()
-    product_type_str = product.product_type if product else "unknown"
-    res = engine.analyze_image(filepath, expected_product=product_type_str)
-
-    deliv_score = res.get("quality_score") if res.get("quality_score") is not None else 85.0
-    deliv_grade = res.get("quality_grade") if res.get("quality_grade") is not None else "A"
+    res = engine.analyze_image(filepath)
 
     deliv_insp = QualityInspection(
         product_id=order.product_id,
@@ -414,11 +413,11 @@ def upload_delivery_inspection_photo(
         inspection_level="delivery",
         image_url=image_url,
         cv_results=res.get("cv_breakdown", {}),
-        quality_score=deliv_score,
-        quality_grade=deliv_grade,
+        quality_score=res.get("quality_score", 0.0),
+        quality_grade=res.get("quality_grade", "A"),
         defects_detected=res.get("cv_breakdown", {}).get("detected_defects", []),
         model_confidence=res.get("neural_confidence", 0.0),
-        model_version=res.get("model_version", "resnet18-multihead-v3"),
+        model_version="imagenet-resnet18-real-v1",
         inspector_id=current_user.id
     )
     db.add(deliv_insp)
@@ -432,14 +431,15 @@ def upload_delivery_inspection_photo(
     farm_grade = "A"
     if order.farm_inspection_id:
         farm_insp = db.query(QualityInspection).filter(QualityInspection.id == order.farm_inspection_id).first()
-        if farm_insp and farm_insp.quality_score is not None:
+        if farm_insp:
             farm_score = farm_insp.quality_score
             farm_grade = farm_insp.quality_grade
 
     # 4. Variance Tolerance Logic (A6)
+    # variance_percent = ((farm_score - delivery_score) / farm_score) * 100
     tolerance = get_variance_tolerance(db)
-    variance_percent = round(((farm_score - deliv_score) / farm_score) * 100.0, 2)
-    grade_dropped = (farm_grade != deliv_grade)
+    variance_percent = round(((farm_score - deliv_insp.quality_score) / farm_score) * 100.0, 2)
+    grade_dropped = (farm_grade != deliv_insp.quality_grade)
 
     # Exact boundary: 10.00% passes, 10.01% disputes
     variance_acceptable = (variance_percent <= tolerance)
@@ -468,11 +468,11 @@ def upload_delivery_inspection_photo(
             db.add(payment)
             db.flush()
 
-        pdf_url = generate_invoice_pdf(order, farm_score=farm_score, deliv_score=deliv_score, variance=variance_percent)
+        pdf_url = generate_invoice_pdf(order, farm_score=farm_score, deliv_score=deliv_insp.quality_score, variance=variance_percent)
         payment.invoice_url = pdf_url
         db.commit()
 
-        update_farm_reputation(db, order.farmer_id, deliv_score)
+        update_farm_reputation(db, order.farmer_id, deliv_insp.quality_score)
         log_audit_event(db, action="delivery_verified_pass", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": variance_percent, "tolerance": tolerance, "grade_dropped": grade_dropped})
         notify_user(db, user_id=order.farmer_id, n_type="order_delivered", msg=f"Order #{order.id[:8]} quality verified! Bank transfer payment pending.", url=f"/orders/{order.id}")
 
