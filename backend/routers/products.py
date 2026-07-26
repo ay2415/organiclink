@@ -81,11 +81,11 @@ def create_product_listing(
         if cv_result.get("product_mismatch"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=cv_result["cv_breakdown"]["error"]
+                detail=cv_result.get("message", "Product mismatch detected.")
             )
 
-        score = cv_result["quality_score"]
-        grade = cv_result["quality_grade"]
+        score = cv_result.get("quality_score", 0.0)
+        grade = cv_result.get("quality_grade", "N/A")
         defects = cv_result.get("cv_breakdown", {}).get("detected_defects", [])
 
         # 3. Listing Gate Enforcement: Grade R is REJECTED
@@ -115,7 +115,7 @@ def create_product_listing(
             quality_grade=grade,
             defects_detected=cv_result.get("cv_breakdown", {}).get("detected_defects", []),
             model_confidence=cv_result.get("neural_confidence", 0.0),
-            model_version="imagenet-resnet18-real-v1",
+            model_version=cv_result.get("model_version", "resnet18-multihead-v3"),
             inspector_id=current_user.id
         )
         db.add(inspection)
@@ -129,10 +129,10 @@ def create_product_listing(
             "inspection_level": "farm",
             "quality_score": score,
             "quality_grade": grade,
-            "cv_results": cv_result["cv_results"],
+            "cv_results": cv_result.get("cv_breakdown", {}),
             "defects_detected": defects,
-            "model_confidence": cv_result["model_confidence"],
-            "model_version": cv_result["model_version"],
+            "model_confidence": cv_result.get("neural_confidence", 0.0),
+            "model_version": cv_result.get("model_version", "resnet18-multihead-v3"),
             "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         },
         farm_name=farm.farm_name,

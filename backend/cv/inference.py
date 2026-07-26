@@ -31,7 +31,7 @@ from torchvision.models import resnet18
 from cv.grading import compute_quality_score, score_to_grade
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "models", "quality_model.pt")
+MODEL_PATH = os.path.join(BASE_DIR, "models_backup", "quality_model.pt")
 MODEL_VERSION = "resnet18-multihead-v3"
 
 # MUST match train.py exactly.
