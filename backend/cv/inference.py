@@ -35,11 +35,19 @@ MODEL_PATH = os.path.join(BASE_DIR, "models_backup", "quality_model.pt")
 MODEL_VERSION = "resnet18-multihead-v3"
 
 # MUST match train.py exactly.
-PRODUCT_CLASSES = [
+PRODUCT_CLASSES_15 = [
     "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
     "grape", "guava", "jujube", "mango", "orange", "pomegranate",
     "potato", "strawberry", "tomato",
 ]
+
+PRODUCT_CLASSES_16 = [
+    "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
+    "grape", "guava", "jujube", "lime", "mango", "orange", "pomegranate",
+    "potato", "strawberry", "tomato",
+]
+
+PRODUCT_CLASSES = PRODUCT_CLASSES_15
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
 # Products the platform sells but the CV model cannot grade.
@@ -116,26 +124,48 @@ class GradingInferenceEngine:
         return cls._instance
 
     def load_model(self):
-        if not os.path.exists(MODEL_PATH):
-            print(f"[CV] No trained model at {MODEL_PATH}. "
-                  f"Run train.py before grading. Grading is DISABLED.")
+        candidate_paths = [
+            os.path.join(BASE_DIR, "models_backup", "quality_model.pt"),
+            os.path.join(BASE_DIR, "models", "quality_model.pt"),
+            os.path.join(BASE_DIR, "models", "grading_model.pt"),
+        ]
+        chosen_path = None
+        for p in candidate_paths:
+            if os.path.exists(p):
+                chosen_path = p
+                break
+
+        if not chosen_path:
+            print(f"[CV] No trained model found. Grading is DISABLED.")
             self.model = None
             self.model_available = False
             return
 
         try:
-            model = MultiHeadProduceModel()
-            model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
+            state_dict = torch.load(chosen_path, map_location=self.device)
+            has_sub_index = 'product_head.1.weight' in state_dict
+            num_prods = state_dict['product_head.1.weight'].shape[0] if has_sub_index else state_dict['product_head.weight'].shape[0]
+            num_defs = state_dict['defect_head.1.weight'].shape[0] if has_sub_index else state_dict['defect_head.weight'].shape[0]
+
+            self.product_classes = PRODUCT_CLASSES_15 if num_prods == 15 else PRODUCT_CLASSES_16
+            model = MultiHeadProduceModel(num_products=num_prods, num_defects=num_defs)
+
+            if has_sub_index:
+                model.product_head = torch.nn.Sequential(torch.nn.Dropout(0.2), torch.nn.Linear(512, num_prods))
+                model.defect_head = torch.nn.Sequential(torch.nn.Dropout(0.3), torch.nn.Linear(512, num_defs))
+            else:
+                model.product_head = torch.nn.Linear(512, num_prods)
+                model.defect_head = torch.nn.Linear(512, num_defs)
+
+            model.load_state_dict(state_dict)
             model.to(self.device)
             model.eval()
             self.model = model
             self.model_available = True
-            self.last_mtime = os.path.getmtime(MODEL_PATH)
-            print(f"[CV] Loaded trained model ({MODEL_VERSION}) on {self.device}.")
+            self.last_mtime = os.path.getmtime(chosen_path)
+            print(f"[CV] Successfully loaded model from {os.path.basename(chosen_path)} ({num_prods} classes) on {self.device}.")
         except Exception as e:
-            # Do NOT silently fall back to an ImageNet model - it cannot grade
-            # quality and produces confident nonsense.
-            print(f"[CV] FAILED to load model: {e}. Grading is DISABLED.")
+            print(f"[CV] FAILED to load model from {os.path.basename(chosen_path)}: {e}. Grading is DISABLED.")
             self.model = None
             self.model_available = False
 

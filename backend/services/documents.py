@@ -101,10 +101,48 @@ def generate_quality_certificate_pdf(inspection_data: dict, farm_name: str, prod
     return f"/static/pdf/{filename}"
 
 
-def generate_invoice_pdf(order_data: dict, farmer_data: dict, buyer_data: dict) -> str:
+def generate_invoice_pdf(order_data, farmer_data=None, buyer_data=None, farm_score=None, deliv_score=None, variance=None, **kwargs) -> str:
     """
     Generates a formal PDF Invoice embedding order pricing and the quality variance breakdown.
+    Accepts both dictionary payloads and ORM Order model instances with optional kwargs.
     """
+    if hasattr(order_data, 'id'):
+        order_obj = order_data
+        order_dict = {
+            "id": str(order_obj.id),
+            "status": getattr(order_obj, 'status', 'pending'),
+            "product_type": getattr(getattr(order_obj, 'product', None), 'product_type', 'Produce') or "Produce",
+            "quantity": getattr(order_obj, 'quantity', 0),
+            "quantity_unit": getattr(order_obj, 'quantity_unit', 'kg'),
+            "price_per_unit": getattr(order_obj, 'price_per_unit', 0),
+            "total_price": getattr(order_obj, 'total_price', 0),
+            "delivery_address": getattr(order_obj, 'delivery_address', 'Ireland'),
+            "farm_grade": "A",
+            "delivery_grade": "A",
+            "quality_variance_percent": variance if variance is not None else getattr(order_obj, 'quality_variance_percent', 0.0),
+            "variance_acceptable": getattr(order_obj, 'variance_acceptable', True)
+        }
+        farmer_obj = getattr(order_obj, 'farmer', None)
+        farmer_dict = farmer_data if isinstance(farmer_data, dict) else {
+            "farm_name": getattr(farmer_obj, 'farm_name', 'Organic Farm') if farmer_obj else "Organic Farm",
+            "town": getattr(farmer_obj, 'town', 'Cork') if farmer_obj else "Cork",
+            "county": getattr(farmer_obj, 'county', 'Cork') if farmer_obj else "Cork",
+            "organic_cert_number": getattr(farmer_obj, 'organic_cert_number', 'IOA-10294') if farmer_obj else "IOA-10294"
+        }
+        buyer_obj = getattr(order_obj, 'buyer', None)
+        buyer_dict = buyer_data if isinstance(buyer_data, dict) else {
+            "name": getattr(buyer_obj, 'name', 'Retailer') if buyer_obj else "Retailer",
+            "role": getattr(buyer_obj, 'role', 'retailer') if buyer_obj else "retailer"
+        }
+        order_data = order_dict
+        farmer_data = farmer_dict
+        buyer_data = buyer_dict
+
+    if not isinstance(farmer_data, dict):
+        farmer_data = {"farm_name": "Organic Farm", "town": "Cork", "county": "Cork", "organic_cert_number": "IOA-10294"}
+    if not isinstance(buyer_data, dict):
+        buyer_data = {"name": "Buyer", "role": "buyer"}
+
     filename = f"invoice_{order_data['id'][:8]}.pdf"
     filepath = os.path.join(PDF_DIR, filename)
 
@@ -129,10 +167,11 @@ def generate_invoice_pdf(order_data: dict, farmer_data: dict, buyer_data: dict) 
     story.append(Spacer(1, 15))
 
     # Seller & Buyer info table
+    role_name = (buyer_data.get('role') or 'buyer').title()
     party_data = [
         ["SELLER (FARMER):", "BUYER:"],
         [f"{farmer_data.get('farm_name', 'Organic Farm')}\n{farmer_data.get('town')}, Co. {farmer_data.get('county')}\nOrganic Cert #: {farmer_data.get('organic_cert_number', 'IOA-10294')}",
-         f"{buyer_data.get('name', 'Buyer')}\n{order_data.get('delivery_address', 'Ireland')}\nRole: {buyer_data.get('role', 'buyer').title()}"]
+         f"{buyer_data.get('name', 'Buyer')}\n{order_data.get('delivery_address', 'Ireland')}\nRole: {role_name}"]
     ]
     pt = Table(party_data, colWidths=[270, 270])
     pt.setStyle(TableStyle([
@@ -146,10 +185,11 @@ def generate_invoice_pdf(order_data: dict, farmer_data: dict, buyer_data: dict) 
     story.append(Spacer(1, 15))
 
     # Order Line Items
+    prod_title = (order_data.get('product_type') or 'Produce').title()
     items_data = [
         ["Product", "Quantity", "Price / Unit", "Total Price (€)"],
         [
-            f"Organic {order_data.get('product_type', 'Produce').title()}",
+            f"Organic {prod_title}",
             f"{order_data.get('quantity', 0)} {order_data.get('quantity_unit', 'kg')}",
             f"€{order_data.get('price_per_unit', 0):.2f}",
             f"€{order_data.get('total_price', 0):.2f}"

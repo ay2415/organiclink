@@ -18,6 +18,10 @@ backend/cv/data.zip
 *.pth
 *.onnx
 
+# Exception for models_backup folder
+!backend/cv/models_backup/
+!backend/cv/models_backup/*.pt
+
 # Node & Frontend
 node_modules/
 dist/
