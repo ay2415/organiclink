@@ -48,6 +48,7 @@ app.add_middleware(
 
 # Mount uploads directory for static image/PDF access
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/static/uploads", StaticFiles(directory=UPLOADS_DIR), name="static_uploads")
 app.mount("/static", StaticFiles(directory=UPLOADS_DIR), name="static")
 
 # Include Routers

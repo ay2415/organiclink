@@ -68,7 +68,7 @@ def place_order(
         transport_by=order_in.transport_by,
         special_requests=order_in.special_requests,
         status="pending",
-        farm_inspection_id=product.quality_inspection_id # default to initial listing inspection
+        farm_inspection_id=None
     )
     db.add(order)
     db.commit()
@@ -253,9 +253,11 @@ def upload_farm_inspection_photo(
     with open(filepath, "wb") as f:
         f.write(image.file.read())
 
+    photo_url = f"/static/uploads/{filename}"
+
     # Record photo (A5)
     photo_rec = Photo(
-        file_path=image_url,
+        file_path=photo_url,
         uploaded_by=current_user.id,
         purpose="farm_inspection",
         product_id=order.product_id,
@@ -275,7 +277,7 @@ def upload_farm_inspection_photo(
             product_id=order.product_id,
             order_id=order.id,
             inspection_level="farm",
-            image_url=image_url,
+            image_url=photo_url,
             cv_results=res.get("cv_breakdown", {}),
             quality_score=res.get("quality_score", 0.0),
             quality_grade=res.get("quality_grade", "A"),
@@ -470,6 +472,7 @@ def upload_delivery_inspection_photo(
 
         pdf_url = generate_invoice_pdf(order, farm_score=farm_score, deliv_score=deliv_insp.quality_score, variance=variance_percent)
         payment.invoice_url = pdf_url
+        order.invoice_url = pdf_url
         db.commit()
 
         update_farm_reputation(db, order.farmer_id, deliv_insp.quality_score)

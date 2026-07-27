@@ -6,6 +6,7 @@ Generates:
 """
 
 import os
+from typing import Any, Optional
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -101,11 +102,54 @@ def generate_quality_certificate_pdf(inspection_data: dict, farm_name: str, prod
     return f"/static/pdf/{filename}"
 
 
-def generate_invoice_pdf(order_data: dict, farmer_data: dict, buyer_data: dict) -> str:
+def generate_invoice_pdf(
+    order_data: Any,
+    farmer_data: Optional[dict] = None,
+    buyer_data: Optional[dict] = None,
+    farm_score: Optional[float] = None,
+    deliv_score: Optional[float] = None,
+    variance: Optional[float] = None,
+    **kwargs
+) -> str:
     """
     Generates a formal PDF Invoice embedding order pricing and the quality variance breakdown.
+    Supports both dictionary objects and ORM Order models.
     """
-    filename = f"invoice_{order_data['id'][:8]}.pdf"
+    if hasattr(order_data, "__dict__") and not isinstance(order_data, dict):
+        o_id = getattr(order_data, "id", "ORDER")
+        o_status = getattr(order_data, "status", "pending")
+        deliv_addr = getattr(order_data, "delivery_address", "Ireland")
+        prod_type = getattr(order_data, "product_type", None)
+        if not prod_type and hasattr(order_data, "product") and order_data.product:
+            prod_type = getattr(order_data.product, "product_type", "Produce")
+        qty = getattr(order_data, "quantity", 0.0)
+        qty_unit = getattr(order_data, "quantity_unit", "kg")
+        price_unit = getattr(order_data, "price_per_unit", 0.0)
+        tot_price = getattr(order_data, "total_price", 0.0)
+        q_var = getattr(order_data, "quality_variance_percent", variance)
+        v_acc = getattr(order_data, "variance_acceptable", None)
+        if v_acc is None and q_var is not None:
+            v_acc = abs(q_var) <= 10.0
+    else:
+        o_id = order_data.get("id", "ORDER")
+        o_status = order_data.get("status", "pending")
+        deliv_addr = order_data.get("delivery_address", "Ireland")
+        prod_type = order_data.get("product_type", "Produce")
+        qty = order_data.get("quantity", 0.0)
+        qty_unit = order_data.get("quantity_unit", "kg")
+        price_unit = order_data.get("price_per_unit", 0.0)
+        tot_price = order_data.get("total_price", 0.0)
+        q_var = order_data.get("quality_variance_percent", variance)
+        v_acc = order_data.get("variance_acceptable", True if (q_var is not None and abs(q_var) <= 10.0) else False)
+
+    if variance is not None:
+        q_var = variance
+        v_acc = abs(variance) <= 10.0
+
+    farmer_info = farmer_data or {}
+    buyer_info = buyer_data or {}
+
+    filename = f"invoice_{o_id[:8]}.pdf"
     filepath = os.path.join(PDF_DIR, filename)
 
     doc = SimpleDocTemplate(
@@ -125,14 +169,14 @@ def generate_invoice_pdf(order_data: dict, farmer_data: dict, buyer_data: dict) 
 
     story = []
     story.append(Paragraph("ORGANICLINK OFFICIAL INVOICE", title_style))
-    story.append(Paragraph(f"Invoice Reference: INV-{order_data['id'][:8].upper()} | Status: {order_data.get('status', 'pending').upper()}", styles['Normal']))
+    story.append(Paragraph(f"Invoice Reference: INV-{o_id[:8].upper()} | Status: {str(o_status).upper()}", styles['Normal']))
     story.append(Spacer(1, 15))
 
     # Seller & Buyer info table
     party_data = [
         ["SELLER (FARMER):", "BUYER:"],
-        [f"{farmer_data.get('farm_name', 'Organic Farm')}\n{farmer_data.get('town')}, Co. {farmer_data.get('county')}\nOrganic Cert #: {farmer_data.get('organic_cert_number', 'IOA-10294')}",
-         f"{buyer_data.get('name', 'Buyer')}\n{order_data.get('delivery_address', 'Ireland')}\nRole: {buyer_data.get('role', 'buyer').title()}"]
+        [f"{farmer_info.get('farm_name', 'Organic Farm')}\n{farmer_info.get('town', 'Ireland')}, Co. {farmer_info.get('county', 'Cork')}\nOrganic Cert #: {farmer_info.get('organic_cert_number', 'IOA-10294')}",
+         f"{buyer_info.get('name', 'Registered Buyer')}\n{deliv_addr}\nRole: {buyer_info.get('role', 'buyer').title()}"]
     ]
     pt = Table(party_data, colWidths=[270, 270])
     pt.setStyle(TableStyle([
@@ -149,10 +193,10 @@ def generate_invoice_pdf(order_data: dict, farmer_data: dict, buyer_data: dict) 
     items_data = [
         ["Product", "Quantity", "Price / Unit", "Total Price (€)"],
         [
-            f"Organic {order_data.get('product_type', 'Produce').title()}",
-            f"{order_data.get('quantity', 0)} {order_data.get('quantity_unit', 'kg')}",
-            f"€{order_data.get('price_per_unit', 0):.2f}",
-            f"€{order_data.get('total_price', 0):.2f}"
+            f"Organic {str(prod_type).title()}",
+            f"{qty} {qty_unit}",
+            f"€{price_unit:.2f}",
+            f"€{tot_price:.2f}"
         ]
     ]
     it = Table(items_data, colWidths=[200, 100, 120, 120])
@@ -169,12 +213,14 @@ def generate_invoice_pdf(order_data: dict, farmer_data: dict, buyer_data: dict) 
 
     # Embedded Quality Summary & Variance Breakdown
     story.append(Paragraph("<b>Quality Assurance & Variance Audit:</b>", styles['Heading3']))
-    variance_pct = order_data.get("quality_variance_percent")
-    var_str = f"{variance_pct:+.2f}%" if variance_pct is not None else "N/A"
-    pass_flag = "PASS (Within +-10% Tolerance)" if order_data.get("variance_acceptable") else "DISPUTED / UNDER REVIEW"
+    var_str = f"{q_var:+.2f}%" if q_var is not None else "N/A"
+    pass_flag = "PASS (Within +-10% Tolerance)" if v_acc else "DISPUTED / UNDER REVIEW"
+
+    f_score_str = f"{farm_score:.1f}" if farm_score is not None else "N/A"
+    d_score_str = f"{deliv_score:.1f}" if deliv_score is not None else "N/A"
 
     quality_data = [
-        ["Farm Inspection Grade:", order_data.get("farm_grade", "A"), "Delivery Inspection Grade:", order_data.get("delivery_grade", "A")],
+        ["Farm Inspection Score:", f_score_str, "Delivery Inspection Score:", d_score_str],
         ["Quality Variance:", var_str, "Quality Tolerance Status:", pass_flag]
     ]
     qt = Table(quality_data, colWidths=[140, 130, 140, 130])

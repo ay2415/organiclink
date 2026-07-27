@@ -8,6 +8,7 @@ import uuid
 import json
 from datetime import date, datetime, timedelta
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 from sqlalchemy.orm import Session
 
@@ -122,22 +123,24 @@ def create_product_listing(
         db.flush()
         inspection_id = inspection.id
 
-    # Generate PDF certificate
-    cert_url = generate_quality_certificate_pdf(
-        inspection_data={
-            "id": inspection.id,
-            "inspection_level": "farm",
-            "quality_score": score,
-            "quality_grade": grade,
-            "cv_results": cv_result.get("cv_breakdown", {}),
-            "defects_detected": defects,
-            "model_confidence": cv_result.get("neural_confidence", 0.0),
-            "model_version": cv_result.get("model_version", "resnet18-multihead-v3"),
-            "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-        },
-        farm_name=farm.farm_name,
-        product_name=product_type.title()
-    )
+    # Generate PDF certificate only if CV gradable and inspection exists
+    cert_url = None
+    if is_cv_gradable and inspection:
+        cert_url = generate_quality_certificate_pdf(
+            inspection_data={
+                "id": inspection.id,
+                "inspection_level": "farm",
+                "quality_score": score,
+                "quality_grade": grade,
+                "cv_results": cv_result.get("cv_breakdown", {}) if cv_result else {},
+                "defects_detected": defects,
+                "model_confidence": cv_result.get("neural_confidence", 0.0) if cv_result else 0.0,
+                "model_version": cv_result.get("model_version", "resnet18-multihead-v3") if cv_result else "n/a",
+                "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+            },
+            farm_name=farm.farm_name,
+            product_name=product_type.title()
+        )
 
     # 5. Demand Score Lookup
     demand_info = get_product_demand(db, product_type=product_type, county=farm.county)
@@ -154,9 +157,9 @@ def create_product_listing(
         buyer_types_open_to=buyer_roles,
         provides_transport=provides_transport,
         image_url=image_url,
-        quality_grade=grade,
-        quality_score=score,
-        quality_inspection_id=inspection.id,
+        quality_grade=grade if is_cv_gradable else None,
+        quality_score=score if is_cv_gradable else None,
+        quality_inspection_id=inspection.id if (is_cv_gradable and inspection) else None,
         demand_score=demand_info["demand_score"],
         demand_is_estimate=demand_info["is_estimate"],
         status="listed",
@@ -167,8 +170,9 @@ def create_product_listing(
     db.commit()
     db.refresh(product)
 
-    inspection.product_id = product.id
-    db.commit()
+    if is_cv_gradable and inspection:
+        inspection.product_id = product.id
+        db.commit()
 
     res = ProductResponse.model_validate(product)
     res.farm_name = farm.farm_name
@@ -177,6 +181,41 @@ def create_product_listing(
     res.county = farm.county
     res.farmer_reputation = farm.reputation_score
     res.cv_breakdown = cv_result
+    return res
+
+
+class ProductPriceUpdate(BaseModel):
+    price_per_unit: float
+
+
+@router.patch("/products/{product_id}/price", response_model=ProductResponse)
+def update_product_price(
+    product_id: str,
+    price_in: ProductPriceUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if price_in.price_per_unit <= 0:
+        raise HTTPException(status_code=400, detail="Price per unit must be greater than zero")
+
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product listing not found")
+
+    farm = db.query(Farm).filter(Farm.id == product.farm_id).first()
+    if not farm or (farm.user_id != current_user.id and current_user.role != "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized to edit price for this listing")
+
+    product.price_per_unit = round(price_in.price_per_unit, 2)
+    db.commit()
+    db.refresh(product)
+
+    res = ProductResponse.model_validate(product)
+    res.farm_name = farm.farm_name
+    res.farmer_name = current_user.name
+    res.town = farm.town
+    res.county = farm.county
+    res.farmer_reputation = farm.reputation_score
     return res
 
 

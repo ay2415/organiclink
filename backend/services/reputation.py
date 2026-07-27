@@ -13,8 +13,8 @@ from sqlalchemy import func
 from models import Farm, Order, RatingReview, QualityInspection
 
 
-def update_farm_reputation(db: Session, farm_id: str) -> float:
-    farm = db.query(Farm).filter(Farm.id == farm_id).first()
+def update_farm_reputation(db: Session, farm_id: str, *args, **kwargs) -> float:
+    farm = db.query(Farm).filter((Farm.id == farm_id) | (Farm.user_id == farm_id)).first()
     if not farm:
         return 0.0
 

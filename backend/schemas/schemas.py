@@ -253,6 +253,16 @@ class OrderDisputeResolve(BaseModel):
     partial_percent: Optional[float] = 50.0
 
 
+class OrderNegotiateProposal(BaseModel):
+    proposed_price_per_unit: float
+    note: Optional[str] = None
+
+
+class OrderNegotiateResponse(BaseModel):
+    action: str # accept, reject
+    note: Optional[str] = None
+
+
 class OrderResponse(BaseModel):
     id: str
     product_id: str
