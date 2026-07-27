@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.all_models import User, Farm, Product, Order, QualityInspection, Payment, Notification, AdminSetting, ProductType, Photo
 from schemas.schemas import (
-    OrderCreate, OrderNegotiate, OrderReject, OrderResponse, QualityInspectionResponse
+    OrderCreate, OrderNegotiate, OrderReject, OrderResponse, QualityInspectionResponse,
+    OrderNegotiateProposal, OrderNegotiateResponse
 )
 from routers.auth import get_current_user
 from cv.inference import get_inference_engine
@@ -339,6 +340,9 @@ def dispatch_order(
 def upload_delivery_inspection_photo(
     order_id: str,
     image: UploadFile = File(...),
+    buyer_action: Optional[str] = Form("auto"), # auto, negotiate, reject
+    proposed_price_per_unit: Optional[float] = Form(None),
+    negotiation_note: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -398,6 +402,7 @@ def upload_delivery_inspection_photo(
 
         pdf_url = generate_invoice_pdf(order, farm_score=100, deliv_score=100, variance=0)
         payment.invoice_url = pdf_url
+        order.invoice_url = pdf_url
         db.commit()
 
         log_audit_event(db, action="delivery_confirmed_no_cv", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id)
@@ -438,18 +443,16 @@ def upload_delivery_inspection_photo(
             farm_grade = farm_insp.quality_grade
 
     # 4. Variance Tolerance Logic (A6)
-    # variance_percent = ((farm_score - delivery_score) / farm_score) * 100
     tolerance = get_variance_tolerance(db)
     variance_percent = round(((farm_score - deliv_insp.quality_score) / farm_score) * 100.0, 2)
     grade_dropped = (farm_grade != deliv_insp.quality_grade)
 
-    # Exact boundary: 10.00% passes, 10.01% disputes
     variance_acceptable = (variance_percent <= tolerance)
 
     order.quality_variance_percent = variance_percent
     order.variance_acceptable = variance_acceptable
 
-    # 5. Handle Pass vs Dispute
+    # 5. Handle Pass vs Quality Drop (Negotiate or Reject)
     if variance_acceptable:
         order.status = "delivered"
         order.dispute_flag = False
@@ -481,17 +484,208 @@ def upload_delivery_inspection_photo(
 
         return {"message": "Delivery quality inspection passed within tolerance", "status": "delivered", "variance_percent": variance_percent, "grade_dropped": grade_dropped}
     else:
-        # DISPUTE TRIGGERED: variance > 10.00%
-        order.status = "disputed"
-        order.dispute_flag = True
-        order.dispute_reason = f"Quality score drop of {variance_percent:.2f}% exceeds tolerance threshold of {tolerance:.1f}%"
-        order.dispute_status = "open"
+        # QUALITY DROP DETECTED (variance > tolerance threshold)
+        if buyer_action == "negotiate" and proposed_price_per_unit is not None and proposed_price_per_unit > 0:
+            order.status = "negotiating"
+            order.dispute_flag = True
+            order.dispute_status = "negotiating"
+            order.dispute_reason = f"Quality drop detected ({variance_percent:.2f}% variance). Buyer requested price negotiation to €{proposed_price_per_unit:.2f}/{order.quantity_unit}."
+            
+            history = list(order.negotiation_history or [])
+            history.append({
+                "role": "buyer",
+                "action": "propose_discount",
+                "proposed_price_per_unit": round(proposed_price_per_unit, 2),
+                "proposed_total": round(proposed_price_per_unit * order.quantity, 2),
+                "note": negotiation_note or f"Quality drop detected during delivery inspection ({variance_percent:.1f}% variance).",
+                "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+            })
+            order.negotiation_history = history
+            db.commit()
+
+            log_audit_event(db, action="delivery_negotiation_initiated", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"proposed_price": proposed_price_per_unit, "variance_percent": variance_percent})
+            notify_user(db, user_id=order.farmer_id, n_type="negotiation_requested", msg=f"Buyer requested price negotiation for Order #{order.id[:8]} (€{proposed_price_per_unit:.2f}/{order.quantity_unit}). Please review.", url=f"/orders/{order.id}")
+
+            return {
+                "message": f"Price reduction negotiation requested (€{proposed_price_per_unit:.2f}/{order.quantity_unit}). Awaiting farmer response.",
+                "status": "negotiating",
+                "variance_percent": variance_percent,
+                "grade_dropped": grade_dropped
+            }
+
+        elif buyer_action == "reject":
+            order.status = "disputed"
+            order.dispute_flag = True
+            order.dispute_reason = f"Delivery rejected by buyer due to quality drop ({variance_percent:.2f}% variance)."
+            order.dispute_status = "open"
+            db.commit()
+
+            log_audit_event(db, action="delivery_rejected_by_buyer", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": variance_percent})
+            notify_user(db, user_id=order.farmer_id, n_type="order_disputed", msg=f"ALERT: Order #{order.id[:8]} delivery REJECTED by buyer due to quality drop ({variance_percent:.1f}%).", url=f"/orders/{order.id}")
+
+            return {
+                "message": f"Delivery rejected by buyer. Admin dispute opened.",
+                "status": "disputed",
+                "variance_percent": variance_percent,
+                "grade_dropped": grade_dropped
+            }
+        else:
+            # Default auto dispute
+            order.status = "disputed"
+            order.dispute_flag = True
+            order.dispute_reason = f"Quality score drop of {variance_percent:.2f}% exceeds tolerance threshold of {tolerance:.1f}%"
+            order.dispute_status = "open"
+            db.commit()
+
+            log_audit_event(db, action="delivery_dispute_triggered", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": variance_percent, "tolerance": tolerance, "grade_dropped": grade_dropped})
+            notify_user(db, user_id=order.farmer_id, n_type="order_disputed", msg=f"ALERT: Order #{order.id[:8]} disputed due to quality drop of {variance_percent:.1f}%", url=f"/orders/{order.id}")
+
+            return {
+                "message": f"DISPUTE TRIGGERED: Quality score drop of {variance_percent:.2f}% exceeds tolerance of {tolerance:.1f}%",
+                "status": "disputed",
+                "variance_percent": variance_percent,
+                "grade_dropped": grade_dropped
+            }
+
+
+# --- Quality Negotiation Resolution Endpoints ---
+@router.post("/{order_id}/negotiate")
+def submit_negotiation_proposal(
+    order_id: str,
+    proposal: OrderNegotiateProposal,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.id != order.buyer_id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only buyer can submit price negotiation proposals")
+
+    if proposal.proposed_price_per_unit <= 0:
+        raise HTTPException(status_code=400, detail="Proposed price must be greater than zero")
+
+    order.status = "negotiating"
+    order.dispute_flag = True
+    order.dispute_status = "negotiating"
+    order.dispute_reason = f"Buyer proposed price negotiation to €{proposal.proposed_price_per_unit:.2f}/{order.quantity_unit}."
+
+    history = list(order.negotiation_history or [])
+    history.append({
+        "role": "buyer",
+        "action": "propose_discount",
+        "proposed_price_per_unit": round(proposal.proposed_price_per_unit, 2),
+        "proposed_total": round(proposal.proposed_price_per_unit * order.quantity, 2),
+        "note": proposal.note or "Negotiation proposal submitted",
+        "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    })
+    order.negotiation_history = history
+    db.commit()
+
+    notify_user(db, user_id=order.farmer_id, n_type="negotiation_requested", msg=f"Buyer submitted price negotiation proposal for Order #{order.id[:8]} (€{proposal.proposed_price_per_unit:.2f}/{order.quantity_unit}).", url=f"/orders/{order.id}")
+    return {"message": "Negotiation proposal submitted", "order_id": order.id, "status": "negotiating"}
+
+
+@router.post("/{order_id}/negotiate/respond")
+def respond_to_negotiation(
+    order_id: str,
+    resp_in: OrderNegotiateResponse,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if current_user.id != order.farmer_id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only farmer can respond to price negotiations")
+
+    history = list(order.negotiation_history or [])
+    last_buyer_prop = next((h for h in reversed(history) if h.get("role") == "buyer" and "proposed_price_per_unit" in h), None)
+
+    if resp_in.action == "accept":
+        if not last_buyer_prop:
+            raise HTTPException(status_code=400, detail="No active buyer negotiation proposal found to accept")
+        
+        new_price = last_buyer_prop["proposed_price_per_unit"]
+        order.price_per_unit = new_price
+        order.total_price = round(new_price * order.quantity, 2)
+        order.status = "delivered"
+        order.dispute_flag = False
+        order.dispute_status = "resolved"
+        order.dispute_resolution = "negotiated_discount"
+        order.dispute_rationale = f"Farmer accepted buyer's negotiated price discount of €{new_price:.2f}/{order.quantity_unit}."
+
+        history.append({
+            "role": "farmer",
+            "action": "accept",
+            "agreed_price_per_unit": new_price,
+            "agreed_total": order.total_price,
+            "note": resp_in.note or "Farmer accepted negotiated discount.",
+            "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        })
+        order.negotiation_history = history
+
+        # Create or update Payment record at negotiated total price
+        payment = db.query(Payment).filter(Payment.order_id == order.id).first()
+        if not payment:
+            payment = Payment(
+                order_id=order.id,
+                farmer_id=order.farmer_id,
+                buyer_id=order.buyer_id,
+                amount=order.total_price,
+                currency="EUR",
+                payment_method="bank_transfer",
+                due_date=order.delivery_date,
+                status="pending",
+                reference_number=f"INV-{order.id[:8].upper()}"
+            )
+            db.add(payment)
+            db.flush()
+        else:
+            payment.amount = order.total_price
+
+        # Generate revised invoice PDF
+        farm_score = 85.0
+        if order.farm_inspection_id:
+            fi = db.query(QualityInspection).filter(QualityInspection.id == order.farm_inspection_id).first()
+            if fi: farm_score = fi.quality_score
+        
+        deliv_score = 85.0
+        if order.delivery_inspection_id:
+            di = db.query(QualityInspection).filter(QualityInspection.id == order.delivery_inspection_id).first()
+            if di: deliv_score = di.quality_score
+
+        pdf_url = generate_invoice_pdf(order, farm_score=farm_score, deliv_score=deliv_score, variance=order.quality_variance_percent)
+        payment.invoice_url = pdf_url
+        order.invoice_url = pdf_url
         db.commit()
 
-        log_audit_event(db, action="delivery_dispute_triggered", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"variance_percent": variance_percent, "tolerance": tolerance, "grade_dropped": grade_dropped})
-        notify_user(db, user_id=order.farmer_id, n_type="order_disputed", msg=f"ALERT: Order #{order.id[:8]} disputed due to quality drop of {variance_percent:.1f}%", url=f"/orders/{order.id}")
+        log_audit_event(db, action="negotiation_accepted_by_farmer", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id, details={"agreed_price": new_price, "total": order.total_price})
+        notify_user(db, user_id=order.buyer_id, n_type="negotiation_accepted", msg=f"Farmer ACCEPTED your negotiated price for Order #{order.id[:8]} (€{new_price:.2f}/{order.quantity_unit}). Order is marked delivered!", url=f"/orders/{order.id}")
 
-        return {"message": f"DISPUTE TRIGGERED: Quality score drop of {variance_percent:.2f}% exceeds tolerance of {tolerance:.1f}%", "status": "disputed", "variance_percent": variance_percent, "grade_dropped": grade_dropped}
+        return {"message": f"Negotiation accepted. Order updated to €{new_price:.2f}/{order.quantity_unit} (Total: €{order.total_price:.2f}) and marked delivered.", "status": "delivered", "total_price": order.total_price}
+
+    elif resp_in.action == "reject":
+        order.status = "disputed"
+        order.dispute_flag = True
+        order.dispute_status = "open"
+        order.dispute_reason = "Farmer rejected buyer's price reduction proposal. Escalated to Admin dispute resolution."
+
+        history.append({
+            "role": "farmer",
+            "action": "reject",
+            "note": resp_in.note or "Farmer rejected proposed price reduction.",
+            "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        })
+        order.negotiation_history = history
+        db.commit()
+
+        log_audit_event(db, action="negotiation_rejected_by_farmer", actor_id=current_user.id, actor_role=current_user.role, order_id=order.id)
+        notify_user(db, user_id=order.buyer_id, n_type="negotiation_rejected", msg=f"Farmer REJECTED your price reduction proposal for Order #{order.id[:8]}. Admin dispute opened.", url=f"/orders/{order.id}")
+
+        return {"message": "Negotiation rejected. Escalated to Admin dispute.", "status": "disputed"}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be 'accept' or 'reject'")
 
 
 # --- Two-Step Bank Payment Confirmation (A9) ---
