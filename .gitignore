@@ -14,8 +14,6 @@ backend/cv/quality dataset/
 backend/cv/data/
 backend/uploads/
 backend/cv/data.zip
-*.pt
-*.pth
 *.onnx
 
 # Exception for models_backup folder
