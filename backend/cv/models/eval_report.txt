@@ -1,27 +1,64 @@
-=== ORGANICLINK CV MODEL EVALUATION REPORT ===
-Architecture: EfficientNet-B0
-Dataset: Synthetic Bootstrap Produce Quality Dataset
-Overall Accuracy: 100.00%
+ORGANICLINK EVALUATION REPORT
+============================================================
+Images: 48817  skipped: 0
+Train: 39054  Val: 9763  Time: 2270.1 min
 
-Per-Class Performance Metrics:
- - FRESH:
-     Precision: 1.0000
-     Recall:    1.0000
-     F1 Score:  1.0000
-     Support:   60
- - MINOR_DEFECT:
-     Precision: 1.0000
-     Recall:    1.0000
-     F1 Score:  1.0000
-     Support:   60
- - MAJOR_DEFECT:
-     Precision: 1.0000
-     Recall:    1.0000
-     F1 Score:  1.0000
-     Support:   60
+ALL METRICS ON HELD-OUT VALIDATION SPLIT.
 
-Confusion Matrix (Rows: Actual, Cols: Predicted):
-Classes: ['fresh', 'minor_defect', 'major_defect']
-  [60, 0, 0]
-  [0, 60, 0]
-  [0, 0, 60]
+------------------------------------------------------------
+PRODUCT CLASSIFICATION
+------------------------------------------------------------
+Accuracy: 99.33%   Macro F1: 0.9250
+
+class             precision   recall      f1  support
+apple                0.9956   0.9906  0.9931     1594
+banana               0.9980   0.9973  0.9976     1478
+bitter_gourd         0.0000   0.0000  0.0000        0
+capsicum             0.9635   0.9679  0.9657      218
+carrot               0.9685   0.9862  0.9773      218
+cucumber             0.9798   0.9798  0.9798      248
+grape                1.0000   1.0000  1.0000       79
+guava                0.9966   1.0000  0.9983      584
+jujube               0.8966   1.0000  0.9455       78
+lime                 0.9870   0.9978  0.9924      456
+mango                0.9934   0.9960  0.9947      759
+orange               0.9955   0.9911  0.9933     1346
+pomegranate          0.9994   0.9987  0.9990     1542
+potato               0.9831   0.9628  0.9729      242
+strawberry           1.0000   0.9970  0.9985      666
+tomato               0.9922   0.9922  0.9922      255
+
+Confusion matrix (rows=true, cols=pred):
+                 apple  banana  bitter  capsic  carrot  cucumb   grape   guava  jujube    lime   mango  orange  pomegr  potato  strawb  tomato
+apple             1579       2       0       1       0       1       0       0       5       0       3       0       1       1       0       1
+banana               0    1474       0       0       1       0       0       1       0       0       1       1       0       0       0       0
+bitter_gourd         0       0       0       0       0       0       0       0       0       0       0       0       0       0       0       0
+capsicum             1       0       0     211       3       2       0       0       0       0       0       0       0       0       0       1
+carrot               0       0       0       1     215       1       0       0       0       0       0       0       0       1       0       0
+cucumber             0       1       0       1       2     243       0       0       0       0       0       0       0       1       0       0
+grape                0       0       0       0       0       0      79       0       0       0       0       0       0       0       0       0
+guava                0       0       0       0       0       0       0     584       0       0       0       0       0       0       0       0
+jujube               0       0       0       0       0       0       0       0      78       0       0       0       0       0       0       0
+lime                 0       0       0       0       0       0       0       0       0     455       0       1       0       0       0       0
+mango                0       0       0       0       0       0       0       0       0       1     756       2       0       0       0       0
+orange               1       0       0       1       0       0       0       1       3       4       1    1334       0       1       0       0
+pomegranate          1       0       0       0       0       0       0       0       1       0       0       0    1540       0       0       0
+potato               2       0       0       2       1       1       0       0       0       1       0       2       0     233       0       0
+strawberry           1       0       0       1       0       0       0       0       0       0       0       0       0       0     664       0
+tomato               1       0       0       1       0       0       0       0       0       0       0       0       0       0       0     253
+
+------------------------------------------------------------
+QUALITY GRADING
+------------------------------------------------------------
+Accuracy: 99.40%   Macro F1: 0.9898
+
+class             precision   recall      f1  support
+fresh                0.9939   0.9951  0.9945     5093
+minor_defect         0.9664   0.9957  0.9808      231
+major_defect         0.9955   0.9926  0.9940     4439
+
+Confusion matrix (rows=true, cols=pred):
+                 fresh  minor_  major_
+fresh             5068       5      20
+minor_defect         1     230       0
+major_defect        30       3    4406

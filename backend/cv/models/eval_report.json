@@ -1,7 +1,585 @@
 {
-  "architecture": "MultiHeadProduceModel (ResNet18)",
-  "dataset_type": "Real Fruit and Vegetable Images (Archive & Data)",
-  "total_samples": 13998,
-  "train_samples": 11199,
-  "val_samples": 2799
+  "architecture": "MultiHeadProduceModel (ResNet18, 2-phase finetune)",
+  "hyperparameters": {
+    "warmup_epochs": 3,
+    "finetune_epochs": 12,
+    "batch_size": 32,
+    "lr_head": 0.001,
+    "lr_finetune": 0.0001,
+    "weight_decay": 0.0001,
+    "weight_cap": 5.0,
+    "val_split": 0.2,
+    "early_stop_patience": 4,
+    "seed": 42,
+    "img_size": 224
+  },
+  "total_images": 48817,
+  "skipped_images": 0,
+  "train_samples": 39054,
+  "val_samples": 9763,
+  "training_time_minutes": 2270.12,
+  "product_metrics": {
+    "accuracy": 0.9933,
+    "macro_f1": 0.925,
+    "per_class": {
+      "apple": {
+        "precision": 0.9956,
+        "recall": 0.9906,
+        "f1": 0.9931,
+        "support": 1594
+      },
+      "banana": {
+        "precision": 0.998,
+        "recall": 0.9973,
+        "f1": 0.9976,
+        "support": 1478
+      },
+      "bitter_gourd": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      },
+      "capsicum": {
+        "precision": 0.9635,
+        "recall": 0.9679,
+        "f1": 0.9657,
+        "support": 218
+      },
+      "carrot": {
+        "precision": 0.9685,
+        "recall": 0.9862,
+        "f1": 0.9773,
+        "support": 218
+      },
+      "cucumber": {
+        "precision": 0.9798,
+        "recall": 0.9798,
+        "f1": 0.9798,
+        "support": 248
+      },
+      "grape": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 79
+      },
+      "guava": {
+        "precision": 0.9966,
+        "recall": 1.0,
+        "f1": 0.9983,
+        "support": 584
+      },
+      "jujube": {
+        "precision": 0.8966,
+        "recall": 1.0,
+        "f1": 0.9455,
+        "support": 78
+      },
+      "lime": {
+        "precision": 0.987,
+        "recall": 0.9978,
+        "f1": 0.9924,
+        "support": 456
+      },
+      "mango": {
+        "precision": 0.9934,
+        "recall": 0.996,
+        "f1": 0.9947,
+        "support": 759
+      },
+      "orange": {
+        "precision": 0.9955,
+        "recall": 0.9911,
+        "f1": 0.9933,
+        "support": 1346
+      },
+      "pomegranate": {
+        "precision": 0.9994,
+        "recall": 0.9987,
+        "f1": 0.999,
+        "support": 1542
+      },
+      "potato": {
+        "precision": 0.9831,
+        "recall": 0.9628,
+        "f1": 0.9729,
+        "support": 242
+      },
+      "strawberry": {
+        "precision": 1.0,
+        "recall": 0.997,
+        "f1": 0.9985,
+        "support": 666
+      },
+      "tomato": {
+        "precision": 0.9922,
+        "recall": 0.9922,
+        "f1": 0.9922,
+        "support": 255
+      }
+    },
+    "confusion_matrix": [
+      [
+        1579,
+        2,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        5,
+        0,
+        3,
+        0,
+        1,
+        1,
+        0,
+        1
+      ],
+      [
+        0,
+        1474,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        211,
+        3,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        1,
+        215,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        1,
+        2,
+        243,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        79,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        584,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        78,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        455,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        756,
+        2,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        3,
+        4,
+        1,
+        1334,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1540,
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0,
+        2,
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        2,
+        0,
+        233,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        664,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        253
+      ]
+    ],
+    "class_names": [
+      "apple",
+      "banana",
+      "bitter_gourd",
+      "capsicum",
+      "carrot",
+      "cucumber",
+      "grape",
+      "guava",
+      "jujube",
+      "lime",
+      "mango",
+      "orange",
+      "pomegranate",
+      "potato",
+      "strawberry",
+      "tomato"
+    ]
+  },
+  "quality_metrics": {
+    "accuracy": 0.994,
+    "macro_f1": 0.9898,
+    "per_class": {
+      "fresh": {
+        "precision": 0.9939,
+        "recall": 0.9951,
+        "f1": 0.9945,
+        "support": 5093
+      },
+      "minor_defect": {
+        "precision": 0.9664,
+        "recall": 0.9957,
+        "f1": 0.9808,
+        "support": 231
+      },
+      "major_defect": {
+        "precision": 0.9955,
+        "recall": 0.9926,
+        "f1": 0.994,
+        "support": 4439
+      }
+    },
+    "confusion_matrix": [
+      [
+        5068,
+        5,
+        20
+      ],
+      [
+        1,
+        230,
+        0
+      ],
+      [
+        30,
+        3,
+        4406
+      ]
+    ],
+    "class_names": [
+      "fresh",
+      "minor_defect",
+      "major_defect"
+    ]
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "phase": "warmup",
+      "train_loss": 1.3785,
+      "val_product_acc": 0.8676,
+      "val_quality_acc": 0.8768
+    },
+    {
+      "epoch": 2,
+      "phase": "warmup",
+      "train_loss": 1.0031,
+      "val_product_acc": 0.8959,
+      "val_quality_acc": 0.8745
+    },
+    {
+      "epoch": 3,
+      "phase": "warmup",
+      "train_loss": 0.9747,
+      "val_product_acc": 0.9002,
+      "val_quality_acc": 0.8599
+    },
+    {
+      "epoch": 4,
+      "phase": "finetune",
+      "train_loss": 0.5038,
+      "val_product_acc": 0.9705,
+      "val_quality_acc": 0.9667
+    },
+    {
+      "epoch": 5,
+      "phase": "finetune",
+      "train_loss": 0.2826,
+      "val_product_acc": 0.972,
+      "val_quality_acc": 0.978
+    },
+    {
+      "epoch": 6,
+      "phase": "finetune",
+      "train_loss": 0.2106,
+      "val_product_acc": 0.9812,
+      "val_quality_acc": 0.9805
+    },
+    {
+      "epoch": 7,
+      "phase": "finetune",
+      "train_loss": 0.1685,
+      "val_product_acc": 0.9747,
+      "val_quality_acc": 0.9813
+    },
+    {
+      "epoch": 8,
+      "phase": "finetune",
+      "train_loss": 0.1412,
+      "val_product_acc": 0.9872,
+      "val_quality_acc": 0.9868
+    },
+    {
+      "epoch": 9,
+      "phase": "finetune",
+      "train_loss": 0.1173,
+      "val_product_acc": 0.9847,
+      "val_quality_acc": 0.987
+    },
+    {
+      "epoch": 10,
+      "phase": "finetune",
+      "train_loss": 0.0797,
+      "val_product_acc": 0.9896,
+      "val_quality_acc": 0.9906
+    },
+    {
+      "epoch": 11,
+      "phase": "finetune",
+      "train_loss": 0.0614,
+      "val_product_acc": 0.9881,
+      "val_quality_acc": 0.9911
+    },
+    {
+      "epoch": 12,
+      "phase": "finetune",
+      "train_loss": 0.0513,
+      "val_product_acc": 0.9921,
+      "val_quality_acc": 0.993
+    },
+    {
+      "epoch": 13,
+      "phase": "finetune",
+      "train_loss": 0.0401,
+      "val_product_acc": 0.9928,
+      "val_quality_acc": 0.9941
+    },
+    {
+      "epoch": 14,
+      "phase": "finetune",
+      "train_loss": 0.0318,
+      "val_product_acc": 0.9933,
+      "val_quality_acc": 0.994
+    },
+    {
+      "epoch": 15,
+      "phase": "finetune",
+      "train_loss": 0.0306,
+      "val_product_acc": 0.9931,
+      "val_quality_acc": 0.9939
+    }
+  ],
+  "note": "All metrics are on the held-out validation split."
 }

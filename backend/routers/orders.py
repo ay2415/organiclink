@@ -56,6 +56,21 @@ def place_order(
 
     total = round(order_in.quantity * product.price_per_unit, 2)
 
+    # Local City Trade Gate for small orders (<50kg)
+    if order_in.quantity < 50.0 and farm.county:
+        farm_county = farm.county.lower().strip()
+        addr_lower = (order_in.delivery_address + " " + (order_in.collection_point_name or "")).lower()
+        irish_counties = ["cork", "dublin", "galway", "limerick", "waterford", "kerry", "clare", "tipperary", "wexford", "kilkenny", "mayo", "donegal"]
+        addr_county = next((c for c in irish_counties if c in addr_lower), None)
+
+        is_local_hub = order_in.delivery_type == "collection_point" and (farm_county in addr_lower or addr_county == farm_county or not addr_county)
+
+        if not is_local_hub and addr_county and addr_county != farm_county and order_in.transport_by == "farmer":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Local City Trade Rule: Small batch orders ({order_in.quantity}kg) can only be traded locally within the farm's city/county ({farm.county.title()}). For cross-county orders, select a local collection hub in {farm.county.title()} or arrange buyer bulk transport."
+            )
+
     order = Order(
         product_id=product.id,
         farmer_id=farm.user_id,
@@ -67,6 +82,8 @@ def place_order(
         delivery_date=order_in.delivery_date,
         delivery_address=order_in.delivery_address,
         transport_by=order_in.transport_by,
+        delivery_type=order_in.delivery_type,
+        collection_point_name=order_in.collection_point_name,
         special_requests=order_in.special_requests,
         status="pending",
         farm_inspection_id=None

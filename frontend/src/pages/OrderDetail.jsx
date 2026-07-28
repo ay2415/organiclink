@@ -26,6 +26,9 @@ const OrderDetail = () => {
   const [negPrice, setNegPrice] = useState(0);
   const [negQty, setNegQty] = useState(0);
   const [negMsg, setNegMsg] = useState('');
+  const [buyerAction, setBuyerAction] = useState('auto'); // auto, negotiate, reject
+  const [proposedPrice, setProposedPrice] = useState(0);
+  const [negotiationNote, setNegotiationNote] = useState('');
 
   // Rating state
   const [stars, setStars] = useState(5);
@@ -41,6 +44,9 @@ const OrderDetail = () => {
       setOrder(res.data);
       setNegPrice(res.data.price_per_unit);
       setNegQty(res.data.quantity);
+      if (!proposedPrice && res.data.price_per_unit) {
+        setProposedPrice(parseFloat((res.data.price_per_unit * 0.8).toFixed(2)));
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -103,12 +109,28 @@ const OrderDetail = () => {
     try {
       const formData = new FormData();
       formData.append('image', delivImageFile);
-      await api.post(`/api/orders/${id}/delivery-photo`, formData);
+      formData.append('buyer_action', buyerAction);
+      if (buyerAction === 'negotiate' && proposedPrice > 0) {
+        formData.append('proposed_price_per_unit', proposedPrice);
+        formData.append('negotiation_note', negotiationNote);
+      }
+      const res = await api.post(`/api/orders/${id}/delivery-photo`, formData);
+      alert(res.data.message || 'Delivery photo submitted');
       fetchOrderDetail();
     } catch (err) {
       alert(err.response?.data?.detail || 'Error uploading delivery photo');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleFarmerRespondNegotiation = async (action) => {
+    try {
+      const res = await api.post(`/api/orders/${id}/negotiate/respond`, { action });
+      alert(res.data.message);
+      fetchOrderDetail();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Error responding to negotiation');
     }
   };
 
@@ -236,9 +258,57 @@ const OrderDetail = () => {
               </div>
             ) : isBuyer && order.status === 'in_transit' ? (
               <form onSubmit={handleUploadDeliveryPhoto} className="space-y-3 pt-2">
-                <input type="file" accept="image/*" onChange={e=>setDelivImageFile(e.target.files[0])} className="text-xs text-emerald-200" />
-                <button type="submit" disabled={uploading} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow">
-                  Upload Delivery Photo & Verify Variance
+                <input type="file" accept="image/*" onChange={e=>setDelivImageFile(e.target.files[0])} className="text-xs text-emerald-200" required />
+                
+                {/* Quality Drop Option Selection */}
+                <div className="bg-emerald-950/80 p-3 rounded-xl border border-emerald-700/60 space-y-2 text-xs">
+                  <span className="font-bold text-emerald-200 block">If delivery quality grade drops:</span>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 text-emerald-100 cursor-pointer">
+                      <input type="radio" name="b_action" value="auto" checked={buyerAction === 'auto'} onChange={e=>setBuyerAction(e.target.value)} />
+                      <span>Standard Verification (Auto-dispute if grade drops &gt;10%)</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-emerald-100 cursor-pointer">
+                      <input type="radio" name="b_action" value="negotiate" checked={buyerAction === 'negotiate'} onChange={e=>setBuyerAction(e.target.value)} />
+                      <span>🤝 Request Price Negotiation (Propose Discount if Grade Drops)</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-emerald-100 cursor-pointer">
+                      <input type="radio" name="b_action" value="reject" checked={buyerAction === 'reject'} onChange={e=>setBuyerAction(e.target.value)} />
+                      <span>❌ Reject Delivery Outright (Open Admin Dispute if Grade Drops)</span>
+                    </label>
+                  </div>
+
+                  {buyerAction === 'negotiate' && (
+                    <div className="pt-2 border-t border-emerald-700/60 space-y-2">
+                      <div>
+                        <label className="block text-[11px] text-emerald-300 font-medium">Proposed Price per {order.quantity_unit} (€):</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.10"
+                          value={proposedPrice || (order.price_per_unit * 0.8).toFixed(2)}
+                          onChange={e=>setProposedPrice(parseFloat(e.target.value))}
+                          className="w-full mt-1 p-2 bg-emerald-900 border border-emerald-600 rounded text-white text-xs font-bold"
+                          placeholder="e.g. 2.50"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-emerald-300 font-medium">Negotiation Note / Reason:</label>
+                        <input
+                          type="text"
+                          value={negotiationNote}
+                          onChange={e=>setNegotiationNote(e.target.value)}
+                          className="w-full mt-1 p-2 bg-emerald-900 border border-emerald-600 rounded text-white text-xs"
+                          placeholder="e.g. Lower quality grade produce; requesting discount"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button type="submit" disabled={uploading} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow flex items-center justify-center gap-2">
+                  <Upload className="w-4 h-4" /> Upload Delivery Photo & Verify Grade
                 </button>
               </form>
             ) : (
@@ -253,6 +323,52 @@ const OrderDetail = () => {
       {/* State Machine Actions & Timeline */}
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
         <h3 className="font-bold text-gray-900 text-sm border-b pb-2">Order State Machine & Bank Settlement Controls</h3>
+
+        {/* Quality Negotiation Banner */}
+        {order.status === 'negotiating' && (
+          <div className="bg-amber-50 border-2 border-amber-500 p-4 rounded-2xl space-y-3">
+            <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <span>Delivery Quality Drop — Price Negotiation Pending</span>
+            </div>
+            <p className="text-xs text-amber-950 font-medium">
+              {order.dispute_reason || "Buyer requested a price discount due to condition detected during delivery inspection."}
+            </p>
+
+            {order.negotiation_history && order.negotiation_history.length > 0 && (
+              <div className="bg-amber-100/90 p-3 rounded-xl border border-amber-300 text-xs text-amber-900 space-y-1">
+                <strong>Latest Buyer Proposal:</strong>
+                <div>Proposed Price: <span className="font-bold text-emerald-800">€{order.negotiation_history[order.negotiation_history.length - 1].proposed_price_per_unit?.toFixed(2)} / {order.quantity_unit}</span> (Total: €{order.negotiation_history[order.negotiation_history.length - 1].proposed_total?.toFixed(2)})</div>
+                {order.negotiation_history[order.negotiation_history.length - 1].note && (
+                  <div className="italic text-amber-800">"{order.negotiation_history[order.negotiation_history.length - 1].note}"</div>
+                )}
+              </div>
+            )}
+
+            {isFarmer && (
+              <div className="flex flex-wrap gap-3 pt-2">
+                <button
+                  onClick={() => handleFarmerRespondNegotiation('accept')}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg shadow flex items-center gap-1"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Accept Discounted Price & Mark Delivered
+                </button>
+                <button
+                  onClick={() => handleFarmerRespondNegotiation('reject')}
+                  className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-lg shadow"
+                >
+                  Reject Discount & Escalate to Admin Dispute
+                </button>
+              </div>
+            )}
+
+            {isBuyer && (
+              <div className="text-xs font-semibold text-amber-800">
+                Your price reduction proposal is pending review by the farmer.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Bank Settlement Notice (A9) */}
         <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-xs text-blue-900 font-medium">

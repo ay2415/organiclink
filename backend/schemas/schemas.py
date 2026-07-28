@@ -233,6 +233,8 @@ class OrderCreate(BaseModel):
     delivery_date: date
     delivery_address: str
     transport_by: str = "farmer" # farmer, buyer
+    delivery_type: str = "direct" # direct, collection_point
+    collection_point_name: Optional[str] = None
     special_requests: Optional[str] = None
 
 
@@ -279,6 +281,8 @@ class OrderResponse(BaseModel):
     delivery_date: date
     delivery_address: str
     transport_by: str
+    delivery_type: Optional[str] = "direct"
+    collection_point_name: Optional[str] = None
     special_requests: Optional[str] = None
     status: str
     negotiation_history: List[Dict[str, Any]] = []

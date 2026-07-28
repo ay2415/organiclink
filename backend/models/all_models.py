@@ -197,6 +197,8 @@ class Order(Base):
     delivery_date = Column(Date, nullable=False)
     delivery_address = Column(Text, nullable=False)
     transport_by = Column(String(20), default="farmer") # farmer, buyer
+    delivery_type = Column(String(30), default="direct") # direct, collection_point
+    collection_point_name = Column(String(200), nullable=True)
     special_requests = Column(Text, nullable=True)
     status = Column(String(50), default="pending", index=True)
     # Statuses: pending, accepted, rejected, negotiating, quality_verified, in_transit, delivered, disputed, paid, completed
