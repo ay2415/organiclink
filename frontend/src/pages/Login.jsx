@@ -42,7 +42,7 @@ const Login = () => {
             <Leaf className="w-8 h-8" />
           </div>
           <h2 className="text-3xl font-extrabold text-gray-900">Sign in to OrganicLink</h2>
-          <p className="mt-2 text-sm text-gray-600">Irish Organic Surplus Marketplace & CV Quality Grading</p>
+          <p className="mt-2 text-sm text-gray-600">Irish Organic Agricultural Marketplace & CV Quality Grading</p>
         </div>
 
         {error && (

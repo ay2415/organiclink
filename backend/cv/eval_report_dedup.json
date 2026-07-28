@@ -1,0 +1,434 @@
+{
+  "split": "deduplicated grouped split (clean_split.csv)",
+  "val_images_scored": 9073,
+  "skipped_unparseable": 664,
+  "missing_on_disk": 0,
+  "product_metrics": {
+    "accuracy": 0.7227,
+    "macro_f1_all_classes": 0.6445,
+    "macro_f1_present_classes": 0.6905,
+    "classes_with_zero_support": [
+      "bitter_gourd"
+    ],
+    "per_class": {
+      "apple": {
+        "precision": 0.9855,
+        "recall": 0.725,
+        "f1": 0.8354,
+        "support": 1498
+      },
+      "banana": {
+        "precision": 0.997,
+        "recall": 0.9521,
+        "f1": 0.974,
+        "support": 1379
+      },
+      "bitter_gourd": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      },
+      "capsicum": {
+        "precision": 0.4728,
+        "recall": 0.9339,
+        "f1": 0.6278,
+        "support": 242
+      },
+      "carrot": {
+        "precision": 0.9141,
+        "recall": 0.975,
+        "f1": 0.9435,
+        "support": 240
+      },
+      "cucumber": {
+        "precision": 0.5,
+        "recall": 0.9646,
+        "f1": 0.6586,
+        "support": 198
+      },
+      "grape": {
+        "precision": 0.8791,
+        "recall": 1.0,
+        "f1": 0.9357,
+        "support": 80
+      },
+      "guava": {
+        "precision": 0.7701,
+        "recall": 0.2642,
+        "f1": 0.3934,
+        "support": 545
+      },
+      "jujube": {
+        "precision": 0.2401,
+        "recall": 1.0,
+        "f1": 0.3873,
+        "support": 79
+      },
+      "mango": {
+        "precision": 0.7793,
+        "recall": 0.9785,
+        "f1": 0.8676,
+        "support": 837
+      },
+      "orange": {
+        "precision": 0.9898,
+        "recall": 0.7218,
+        "f1": 0.8348,
+        "support": 1341
+      },
+      "pomegranate": {
+        "precision": 0.7762,
+        "recall": 0.2174,
+        "f1": 0.3396,
+        "support": 1532
+      },
+      "potato": {
+        "precision": 0.4444,
+        "recall": 0.962,
+        "f1": 0.608,
+        "support": 237
+      },
+      "strawberry": {
+        "precision": 0.9192,
+        "recall": 0.9968,
+        "f1": 0.9565,
+        "support": 628
+      },
+      "tomato": {
+        "precision": 0.1807,
+        "recall": 0.9705,
+        "f1": 0.3046,
+        "support": 237
+      }
+    },
+    "confusion_matrix": [
+      [
+        1086,
+        0,
+        0,
+        89,
+        0,
+        11,
+        0,
+        4,
+        77,
+        49,
+        2,
+        87,
+        11,
+        9,
+        73
+      ],
+      [
+        0,
+        1313,
+        0,
+        0,
+        12,
+        19,
+        1,
+        0,
+        0,
+        7,
+        3,
+        1,
+        14,
+        6,
+        3
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        1,
+        0,
+        226,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        11
+      ],
+      [
+        0,
+        0,
+        0,
+        4,
+        234,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2
+      ],
+      [
+        0,
+        1,
+        0,
+        2,
+        1,
+        191,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        80,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0,
+        31,
+        0,
+        124,
+        4,
+        144,
+        78,
+        76,
+        0,
+        4,
+        59,
+        18,
+        5
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        79,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        3,
+        2,
+        0,
+        2,
+        4,
+        0,
+        0,
+        3,
+        0,
+        819,
+        1,
+        1,
+        2,
+        0,
+        0
+      ],
+      [
+        5,
+        0,
+        0,
+        56,
+        4,
+        26,
+        3,
+        34,
+        87,
+        34,
+        968,
+        3,
+        4,
+        1,
+        116
+      ],
+      [
+        3,
+        0,
+        6,
+        63,
+        0,
+        8,
+        0,
+        2,
+        4,
+        62,
+        3,
+        333,
+        194,
+        21,
+        833
+      ],
+      [
+        1,
+        0,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0,
+        0,
+        3,
+        0,
+        0,
+        228,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        626,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        3,
+        0,
+        1,
+        0,
+        0,
+        0,
+        230
+      ]
+    ],
+    "class_names": [
+      "apple",
+      "banana",
+      "bitter_gourd",
+      "capsicum",
+      "carrot",
+      "cucumber",
+      "grape",
+      "guava",
+      "jujube",
+      "mango",
+      "orange",
+      "pomegranate",
+      "potato",
+      "strawberry",
+      "tomato"
+    ]
+  },
+  "quality_metrics": {
+    "accuracy": 0.9254,
+    "macro_f1_all_classes": 0.6168,
+    "macro_f1_present_classes": 0.9252,
+    "classes_with_zero_support": [
+      "minor_defect"
+    ],
+    "per_class": {
+      "fresh": {
+        "precision": 0.9531,
+        "recall": 0.9039,
+        "f1": 0.9278,
+        "support": 4816
+      },
+      "minor_defect": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 0
+      },
+      "major_defect": {
+        "precision": 0.8972,
+        "recall": 0.9497,
+        "f1": 0.9227,
+        "support": 4257
+      }
+    },
+    "confusion_matrix": [
+      [
+        4353,
+        0,
+        463
+      ],
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        214,
+        0,
+        4043
+      ]
+    ],
+    "class_names": [
+      "fresh",
+      "minor_defect",
+      "major_defect"
+    ]
+  },
+  "false_fresh_count": 214,
+  "major_defect_total": 4257,
+  "false_fresh_rate": 0.0503,
+  "note": "No retraining. Existing checkpoint evaluated on a grouped split where near-duplicate images are confined to one side."
+}

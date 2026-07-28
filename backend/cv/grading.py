@@ -25,19 +25,15 @@ SCORE_MINOR = 55.0
 SCORE_MAJOR = 8.0
 
 
-def compute_quality_score(
+def calibrate_probabilities(
     prob_fresh: float,
     prob_minor: float,
     prob_major: float,
-    colour_vibrancy: float,
     colour_uniformity: float,
-) -> float:
+    defect_coverage_percent: float,
+) -> tuple:
     """
-    Overall quality score (0-100), dominated by the trained classifier.
-
-    prob_* are softmax probabilities from the defect head (they sum to 1).
-    colour_* are 0-100 OpenCV sub-metrics used as a minor, explainable
-    adjustment - they cannot by themselves flip a grade.
+    Normalizes softmax probabilities from the defect head.
     """
     total = prob_fresh + prob_minor + prob_major
     if total > 0:
@@ -45,10 +41,29 @@ def compute_quality_score(
         prob_minor /= total
         prob_major /= total
 
+    return prob_fresh, prob_minor, prob_major
+
+
+def compute_quality_score(
+    prob_fresh: float,
+    prob_minor: float,
+    prob_major: float,
+    colour_vibrancy: float,
+    colour_uniformity: float,
+    defect_coverage_percent: float = 0.0,
+) -> float:
+    """
+    Overall quality score (0-100), driven by the trained multi-head ResNet-18 classifier (80%)
+    and OpenCV colour metrics (20%).
+    """
+    pf, pm, pj = calibrate_probabilities(
+        prob_fresh, prob_minor, prob_major, colour_uniformity, defect_coverage_percent
+    )
+
     class_component = (
-        SCORE_FRESH * prob_fresh
-        + SCORE_MINOR * prob_minor
-        + SCORE_MAJOR * prob_major
+        SCORE_FRESH * pf
+        + SCORE_MINOR * pm
+        + SCORE_MAJOR * pj
     )
 
     colour_component = 0.6 * colour_vibrancy + 0.4 * colour_uniformity

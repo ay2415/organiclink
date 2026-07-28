@@ -97,7 +97,7 @@ const FarmerNewListing = () => {
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
       <div className="border-b pb-4">
         <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
-          <PlusCircle className="w-6 h-6 text-emerald-700" /> List Surplus Produce & Run CV Grading
+          <PlusCircle className="w-6 h-6 text-emerald-700" /> List Available Produce & Run CV Grading
         </h1>
         <p className="text-xs text-gray-500">Produce is automatically graded by AI Computer Vision before publication (Grades A, B, C accepted; Grade R rejected)</p>
       </div>
@@ -148,7 +148,7 @@ const FarmerNewListing = () => {
             </div>
 
             <div>
-              <label className="font-bold text-gray-700 block mb-1">Available Surplus Quantity</label>
+              <label className="font-bold text-gray-700 block mb-1">Available Quantity</label>
               <input type="number" step="0.5" value={availableQuantity} onChange={e => setAvailableQuantity(parseFloat(e.target.value))} className="w-full border p-2.5 rounded-lg font-bold text-emerald-800" />
             </div>
 
@@ -231,7 +231,7 @@ const FarmerNewListing = () => {
           disabled={submitting}
           className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl shadow-lg transition-all text-sm flex items-center justify-center gap-2"
         >
-          <CheckCircle2 className="w-5 h-5" /> Publish Certified Surplus Listing
+          <CheckCircle2 className="w-5 h-5" /> Publish Certified Available Listing
         </button>
       </form>
     </div>

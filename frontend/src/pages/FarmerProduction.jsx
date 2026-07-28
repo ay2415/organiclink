@@ -73,14 +73,14 @@ const FarmerProduction = () => {
       {surplusData && (
         <div className="bg-gradient-to-r from-emerald-900 to-emerald-800 text-white p-5 rounded-2xl shadow-md flex justify-between items-center gap-4">
           <div>
-            <span className="text-[11px] uppercase tracking-wider text-emerald-300 font-bold block">Surplus Calculation Engine</span>
+            <span className="text-[11px] uppercase tracking-wider text-emerald-300 font-bold block">Uncontracted Stock Calculation Engine</span>
             <h3 className="text-lg font-bold capitalize">Organic {surplusData.product_type}</h3>
             <p className="text-xs text-emerald-200 mt-0.5">
               Produced: <strong>{surplusData.total_produced} {surplusData.unit}</strong> | Active Contracts: <strong>{surplusData.total_committed} {surplusData.unit}</strong>
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl text-center border border-white/20">
-            <span className="text-[10px] text-emerald-200 uppercase font-bold block">Uncontracted Surplus</span>
+            <span className="text-[10px] text-emerald-200 uppercase font-bold block">Uncontracted Available Stock</span>
             <span className="text-xl font-extrabold text-amber-300">{surplusData.surplus} {surplusData.unit}</span>
           </div>
         </div>

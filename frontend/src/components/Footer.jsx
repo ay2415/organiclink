@@ -8,7 +8,7 @@ const Footer = () => {
         <div className="flex items-center space-x-2">
           <Leaf className="w-4 h-4 text-emerald-400" />
           <span className="font-bold text-white">OrganicLink Ireland</span>
-          <span>— Irish Organic Farm Surplus Marketplace</span>
+          <span>— Irish Organic Agricultural Marketplace</span>
         </div>
         <div className="text-emerald-400 font-medium">
           Computer Vision Quality Grading | Certified Organic Traceability | EUR Currency & Metric System

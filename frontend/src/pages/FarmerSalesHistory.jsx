@@ -29,9 +29,9 @@ const FarmerSalesHistory = () => {
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       <div className="border-b pb-4">
         <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
-          <Receipt className="w-6 h-6 text-emerald-700" /> Completed Surplus Sales History
+          <Receipt className="w-6 h-6 text-emerald-700" /> Completed Sales History
         </h1>
-        <p className="text-xs text-gray-500">Historical ledger of delivered surplus produce, buyer roles, prices, and quality grades</p>
+        <p className="text-xs text-gray-500">Historical ledger of delivered produce, buyer roles, prices, and quality grades</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

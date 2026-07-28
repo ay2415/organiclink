@@ -162,7 +162,7 @@ const ProductDetail = () => {
         {/* Purchase Order Card */}
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-lg h-fit space-y-5">
           <div>
-            <span className="text-xs font-bold text-gray-500 uppercase block">Surplus Price</span>
+            <span className="text-xs font-bold text-gray-500 uppercase block">Price</span>
             <div className="text-3xl font-extrabold text-emerald-800">
               €{product.price_per_unit.toFixed(2)} <span className="text-sm font-normal text-gray-500">/ {product.quantity_unit}</span>
             </div>
@@ -274,7 +274,7 @@ const ProductDetail = () => {
               disabled={submitting}
               className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
             >
-              <ShoppingCart className="w-5 h-5" /> Place Surplus Order
+              <ShoppingCart className="w-5 h-5" /> Place Order
             </button>
           </form>
         </div>

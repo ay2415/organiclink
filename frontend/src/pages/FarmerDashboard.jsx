@@ -101,44 +101,55 @@ const FarmerDashboard = () => {
         </div>
       </div>
 
-      {/* CANONICAL SURPLUS SUGGESTION CARD (CRITICAL REQUIREMENT) */}
+      {/* CANONICAL UNCONTRACTED CALCULATION CARD */}
       <div className="bg-gradient-to-r from-amber-500 to-earth-500 text-white p-6 rounded-2xl shadow-md space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-6 h-6 text-amber-100" />
-            <h2 className="text-lg font-bold text-white">Automated Surplus Calculation & Listing Assistant</h2>
+            <h2 className="text-lg font-bold text-white">Automated Available Stock & Listing Assistant</h2>
           </div>
           <span className="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-semibold">Active Contract Calculation</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {surplusSuggestions.length > 0 ? (
-            surplusSuggestions.map((s, idx) => (
-              <div key={idx} className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 flex flex-col justify-between space-y-3">
-                <div>
-                  <span className="text-xs uppercase font-bold text-amber-100 tracking-wider block">Product: Organic {s.product_type}</span>
-                  <div className="text-sm font-medium mt-1">
-                    You produced <span className="font-extrabold text-white">{s.produced_quantity}{s.unit}</span> this period, <span className="font-extrabold text-white">{s.committed_quantity}{s.unit}</span> is committed under processor contract.
-                  </div>
-                </div>
-
-                <div className="bg-white text-amber-950 p-3 rounded-lg flex items-center justify-between">
+            surplusSuggestions.map((s, idx) => {
+              const isMilk = s.product_type?.toLowerCase() === 'milk';
+              return (
+                <div key={idx} className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 flex flex-col justify-between space-y-3">
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-amber-700 block">Suggested Surplus to List</span>
-                    <span className="text-lg font-extrabold text-emerald-700">{s.suggested_surplus} {s.unit}</span>
+                    <span className="text-xs uppercase font-bold text-amber-100 tracking-wider block">Product: Organic {s.product_type}</span>
+                    <div className="text-sm font-medium mt-1">
+                      You produced <span className="font-extrabold text-white">{s.produced_quantity}{s.unit}</span> this period, <span className="font-extrabold text-white">{s.committed_quantity}{s.unit}</span> is committed under processor contract.
+                    </div>
                   </div>
-                  <Link
-                    to={`/farmer/listings/new?product_type=${s.product_type}&qty=${s.suggested_surplus}`}
-                    className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 shadow-sm transition-all"
-                  >
-                    <PlusCircle className="w-4 h-4" /> List {s.suggested_surplus}{s.unit}
-                  </Link>
+
+                  <div className="bg-white text-amber-950 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-amber-700 block">Available Stock</span>
+                      <span className="text-lg font-extrabold text-emerald-700">{s.suggested_surplus} {s.unit}</span>
+                    </div>
+                    
+                    {/* Part 4 Milk Rule: Hide List Available Stock button for milk */}
+                    {!isMilk ? (
+                      <Link
+                        to={`/farmer/listings/new?product_type=${s.product_type}&qty=${s.suggested_surplus}`}
+                        className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 shadow-sm transition-all"
+                      >
+                        <PlusCircle className="w-4 h-4" /> List {s.suggested_surplus}{s.unit}
+                      </Link>
+                    ) : (
+                      <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2.5 py-1 rounded-md">
+                        Milk Contract Declared
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="col-span-3 bg-white/10 p-4 rounded-xl text-center text-sm">
-              You produced 100kg onions, 80kg is committed — list your <span className="font-bold text-white">20kg surplus</span>.
+              You produced 100kg onions, 80kg is committed — list your <span className="font-bold text-white">20kg available stock</span>.
             </div>
           )}
         </div>
@@ -211,10 +222,10 @@ const FarmerDashboard = () => {
           </div>
         </div>
 
-        {/* Active Surplus Listings */}
+        {/* Active Listings */}
         <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-            <h3 className="font-bold text-gray-900">My Active Surplus Listings</h3>
+            <h3 className="font-bold text-gray-900">My Active Listings</h3>
             <Link to="/marketplace" className="text-xs font-bold text-emerald-700 hover:underline">View All</Link>
           </div>
 

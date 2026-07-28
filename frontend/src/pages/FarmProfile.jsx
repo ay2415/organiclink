@@ -53,7 +53,7 @@ const FarmProfile = () => {
 
       <div className="space-y-4">
         <h2 className="text-xl font-extrabold text-gray-900 flex items-center gap-2">
-          <Store className="w-5 h-5 text-emerald-700" /> Active Surplus Listings
+          <Store className="w-5 h-5 text-emerald-700" /> Active Listings
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {active_listings.map((prod) => (

@@ -80,7 +80,7 @@ const FarmerHubs = () => {
                 onClick={() => navigate(`/messages?hub_id=${hub.id}&hub_name=${encodeURIComponent(hub.name)}`)}
                 className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
               >
-                <MessageSquare className="w-4 h-4" /> Pitch Surplus to this Buyer
+                <MessageSquare className="w-4 h-4" /> Pitch Available Stock to this Buyer
               </button>
             </div>
           ))}

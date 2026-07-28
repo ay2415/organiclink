@@ -94,7 +94,7 @@ const PublicProfile = () => {
       {profile.role === 'farmer' && (
         <div className="space-y-4">
           <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2 border-b pb-2">
-            <ShoppingBag className="w-5 h-5 text-emerald-700" /> Active Farm Surplus Listings ({active_listings.length})
+            <ShoppingBag className="w-5 h-5 text-emerald-700" /> Active Farm Listings ({active_listings.length})
           </h3>
 
           {active_listings.length > 0 ? (

@@ -44,9 +44,9 @@ const Marketplace = () => {
       <div className="bg-gradient-to-r from-emerald-900 to-emerald-800 text-white rounded-2xl p-6 shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <span className="bg-emerald-700 text-emerald-200 text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider mb-2 inline-block">
-            100% Certified Irish Organic Surplus
+            100% Certified Irish Organic Available Stock
           </span>
-          <h1 className="text-2xl font-extrabold">Irish Organic Farm Surplus Feed</h1>
+          <h1 className="text-2xl font-extrabold">Irish Organic Farm Available Stock Marketplace</h1>
           <p className="text-xs text-emerald-200 mt-1">Computer vision AI quality graded produce & milk directly from certified Irish farms</p>
         </div>
 
@@ -65,7 +65,7 @@ const Marketplace = () => {
         {/* Sidebar Filters */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-5 h-fit">
           <div className="flex items-center justify-between border-b pb-3 font-bold text-gray-900 text-sm">
-            <span className="flex items-center gap-1.5"><Filter className="w-4 h-4 text-emerald-700" /> Filter Surplus</span>
+            <span className="flex items-center gap-1.5"><Filter className="w-4 h-4 text-emerald-700" /> Filter Stock</span>
             <button onClick={()=>{setProductType(''); setCounty(''); setMinGrade(''); setMaxDistance('');}} className="text-[10px] text-emerald-700 hover:underline">Reset</button>
           </div>
 

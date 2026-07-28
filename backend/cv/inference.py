@@ -21,11 +21,14 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from torchvision.models import resnet18
 
-from cv.grading import compute_quality_score, score_to_grade
+from cv.grading import compute_quality_score, score_to_grade, calibrate_probabilities
 
-# ============================ THE TOGGLE ============================
-USE_NEW_MODEL = True   # <-- True = new grading_model.pt, False = old quality_model.pt
-# ===================================================================
+# ============================ MODEL TOGGLE ============================
+# Set MODEL_CHOICE to switch models with a single word change:
+#   "grading_model"  -> Uses models/grading_model.pt (16 produce classes, including lime)
+#   "quality_model"  -> Uses models_backup/quality_model.pt (15 produce classes, original)
+MODEL_CHOICE = "grading_model"
+# ======================================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -40,14 +43,16 @@ PRODUCT_CLASSES_16 = [
     "potato", "strawberry", "tomato",
 ]
 
-if USE_NEW_MODEL:
+if MODEL_CHOICE == "quality_model":
+    MODEL_PATH = os.path.join(BASE_DIR, "models_backup", "quality_model.pt")
+    if not os.path.exists(MODEL_PATH):
+        MODEL_PATH = os.path.join(BASE_DIR, "models", "quality_model.pt")
+    PRODUCT_CLASSES = PRODUCT_CLASSES_15
+    MODEL_VERSION = "resnet18-multihead-v3-15class"
+else:
     MODEL_PATH = os.path.join(BASE_DIR, "models", "grading_model.pt")
     PRODUCT_CLASSES = PRODUCT_CLASSES_16
     MODEL_VERSION = "resnet18-multihead-v6-16class"
-else:
-    MODEL_PATH = os.path.join(BASE_DIR, "models", "quality_model.pt")
-    PRODUCT_CLASSES = PRODUCT_CLASSES_15
-    MODEL_VERSION = "resnet18-multihead-v3-15class"
 
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
@@ -128,7 +133,8 @@ class GradingInferenceEngine:
             inst.last_mtime = 0
             inst.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             inst.transform = transforms.Compose([
-                transforms.Resize((224, 224)),
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225]),
@@ -243,8 +249,14 @@ class GradingInferenceEngine:
             expected_conf = float(prod_probs[expected_idx].item() * 100.0)
             synonyms = PRODUCT_SYNONYMS.get(expected, [expected])
             is_synonym = any(predicted_product == s.lower().replace(" ", "_") for s in synonyms)
-            if (predicted_product != expected and not is_synonym
-                    and (predicted_conf - expected_conf) > MISMATCH_MARGIN):
+
+            # Top-3 tolerance for bulk market produce piles (e.g. piles of red tomatoes)
+            top3_indices = torch.topk(prod_probs, k=min(3, len(PRODUCT_CLASSES))).indices.tolist()
+            top3_classes = [PRODUCT_CLASSES[i] for i in top3_indices]
+            is_top3_match = (expected in top3_classes or any(s in top3_classes for s in synonyms)) and (expected_conf >= 15.0)
+
+            if (predicted_product != expected and not is_synonym and not is_top3_match
+                    and (predicted_conf - expected_conf) > 30.0):
                 return {"status": "product_mismatch", "product_mismatch": True,
                         "quality_grade": "R", "quality_score": 0.0,
                         "predicted_label": predicted_product,
@@ -254,15 +266,22 @@ class GradingInferenceEngine:
                                     f"{expected_product}. Please upload a photo of your "
                                     f"{expected_product}.")}
 
-        prob_fresh = float(def_probs[0].item())
-        prob_minor = float(def_probs[1].item())
-        prob_major = float(def_probs[2].item())
-        predicted_defect = DEFECT_CLASSES[int(torch.argmax(def_probs).item())]
+        prob_fresh, prob_minor, prob_major = calibrate_probabilities(
+            float(def_probs[0].item()),
+            float(def_probs[1].item()),
+            float(def_probs[2].item()),
+            metrics["colour_uniformity"],
+            metrics["defect_coverage_percent"],
+        )
+
+        probs_arr = [prob_fresh, prob_minor, prob_major]
+        predicted_defect = DEFECT_CLASSES[int(np.argmax(probs_arr))]
 
         quality_score = compute_quality_score(
             prob_fresh=prob_fresh, prob_minor=prob_minor, prob_major=prob_major,
             colour_vibrancy=metrics["colour_vibrancy"],
             colour_uniformity=metrics["colour_uniformity"],
+            defect_coverage_percent=metrics["defect_coverage_percent"],
         )
         grade = score_to_grade(quality_score)
 
