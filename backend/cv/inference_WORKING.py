@@ -116,50 +116,26 @@ class GradingInferenceEngine:
         return cls._instance
 
     def load_model(self):
-        candidate_paths = [
-            (os.path.join(BASE_DIR, "models", "quality_model.pt"), "models/quality_model.pt"),
-            (os.path.join(BASE_DIR, "models_backup", "quality_model.pt"), "backup model (models_backup/quality_model.pt)"),
-            (os.path.join(BASE_DIR, "models", "grading_model.pt"), "models/grading_model.pt"),
-        ]
+        if not os.path.exists(MODEL_PATH):
+            print(f"[CV] No trained model at {MODEL_PATH}. "
+                  f"Run train.py before grading. Grading is DISABLED.")
+            self.model = None
+            self.model_available = False
+            return
 
-        loaded = False
-        for path, label in candidate_paths:
-            if not os.path.exists(path):
-                continue
-            try:
-                raw_state = torch.load(path, map_location=self.device)
-                
-                # Remap state dict keys if model saved with Sequential head wrappers
-                mapped_state = {}
-                for k, v in raw_state.items():
-                    new_k = k.replace("product_head.1.", "product_head.").replace("defect_head.1.", "defect_head.")
-                    mapped_state[new_k] = v
-
-                # Dynamically match head output dimensions from checkpoint
-                p_head_weight = mapped_state.get("product_head.weight")
-                d_head_weight = mapped_state.get("defect_head.weight")
-
-                num_products = p_head_weight.shape[0] if p_head_weight is not None else len(PRODUCT_CLASSES)
-                num_defects = d_head_weight.shape[0] if d_head_weight is not None else len(DEFECT_CLASSES)
-
-                model = MultiHeadProduceModel(num_products=num_products, num_defects=num_defects)
-                model.load_state_dict(mapped_state)
-                model.to(self.device)
-                model.eval()
-
-                self.model = model
-                self.num_products_model = num_products
-                self.model_available = True
-                self.loaded_model_path = path
-                self.last_mtime = os.path.getmtime(path)
-                print(f"[CV] Loaded {label} (products={num_products}, defects={num_defects}) on {self.device}.")
-                loaded = True
-                break
-            except Exception as e:
-                print(f"[CV] Warning: Failed to load candidate model at {path}: {e}")
-
-        if not loaded:
-            print(f"[CV] No valid trained model found among candidates. Grading is DISABLED.")
+        try:
+            model = MultiHeadProduceModel()
+            model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
+            model.to(self.device)
+            model.eval()
+            self.model = model
+            self.model_available = True
+            self.last_mtime = os.path.getmtime(MODEL_PATH)
+            print(f"[CV] Loaded trained model ({MODEL_VERSION}) on {self.device}.")
+        except Exception as e:
+            # Do NOT silently fall back to an ImageNet model - it cannot grade
+            # quality and produces confident nonsense.
+            print(f"[CV] FAILED to load model: {e}. Grading is DISABLED.")
             self.model = None
             self.model_available = False
 
@@ -244,9 +220,6 @@ class GradingInferenceEngine:
             prod_logits, def_logits = self.model(input_tensor)
             prod_probs = torch.softmax(prod_logits, dim=1).squeeze(0)
             def_probs = torch.softmax(def_logits, dim=1).squeeze(0)
-
-        if prod_probs.shape[0] > len(PRODUCT_CLASSES):
-            prod_probs = prod_probs[:len(PRODUCT_CLASSES)]
 
         top_idx = int(torch.argmax(prod_probs).item())
         predicted_product = PRODUCT_CLASSES[top_idx]
