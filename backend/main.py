@@ -28,6 +28,7 @@ from routers.messages import router as messages_router
 from routers.notifications import router as notifications_router
 from routers.admin import router as admin_router
 from routers.production_logs import router as production_logs_router
+from routers.local_hubs import router as local_hubs_router
 
 app = FastAPI(
     title="OrganicLink API",
@@ -66,6 +67,7 @@ app.include_router(messages_router)
 app.include_router(notifications_router)
 app.include_router(admin_router)
 app.include_router(production_logs_router)
+app.include_router(local_hubs_router)
 
 
 @app.on_event("startup")
