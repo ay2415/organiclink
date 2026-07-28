@@ -20,6 +20,8 @@ import BuyerDashboard from './pages/BuyerDashboard';
 import OrderDetail from './pages/OrderDetail';
 import Messages from './pages/Messages';
 import AdminDashboard from './pages/AdminDashboard';
+import Profile from './pages/Profile';
+import PublicProfile from './pages/PublicProfile';
 
 function App() {
   return (
@@ -35,6 +37,8 @@ function App() {
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/farm/:id" element={<FarmProfile />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/users/:id" element={<PublicProfile />} />
 
               {/* Farmer Routes */}
               <Route path="/farmer/dashboard" element={<FarmerDashboard />} />

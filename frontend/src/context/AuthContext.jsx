@@ -45,6 +45,14 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-emerald-800 font-extrabold text-sm">
+        Loading OrganicLink Session...
+      </div>
+    );
+  }
+
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}

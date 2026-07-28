@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Leaf, Store, ShoppingBag, Shield, LogOut, MessageSquare, MapPin } from 'lucide-react';
+import { Leaf, Store, ShoppingBag, Shield, LogOut, MessageSquare, MapPin, User } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
@@ -22,7 +22,7 @@ const Navbar = () => {
             </div>
             <div>
               <span className="font-extrabold text-xl tracking-tight text-white">Organic<span className="text-emerald-400">Link</span></span>
-              <span className="text-[10px] block text-emerald-300 tracking-wider -mt-1 font-semibold">IRISH ORGANIC SURPLUS MARKETPLACE</span>
+              <span className="text-[10px] block text-emerald-300 tracking-wider -mt-1 font-semibold">IRISH ORGANIC AGRICULTURAL MARKETPLACE</span>
             </div>
           </Link>
 
@@ -40,7 +40,7 @@ const Navbar = () => {
                   <MapPin className="w-4 h-4 text-emerald-400" /> Nearest Buyers
                 </Link>
                 <Link to="/farmer/listings/new" className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">
-                  + List Surplus
+                  + List Available Stock
                 </Link>
               </>
             )}
@@ -58,9 +58,14 @@ const Navbar = () => {
             )}
 
             {user && (
-              <Link to="/messages" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
-                <MessageSquare className="w-4 h-4" /> Messages
-              </Link>
+              <>
+                <Link to="/messages" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
+                  <MessageSquare className="w-4 h-4" /> Messages
+                </Link>
+                <Link to="/profile" className="hover:text-emerald-400 transition-colors flex items-center gap-1">
+                  <User className="w-4 h-4" /> Profile
+                </Link>
+              </>
             )}
           </div>
 

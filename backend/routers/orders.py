@@ -43,12 +43,20 @@ def place_order(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    product = db.query(Product).filter(Product.id == order_in.product_id).first()
+    # Concurrency Lock Check (Change 8)
+    product = db.query(Product).filter(Product.id == order_in.product_id).with_for_update().first()
     if not product or product.status != "listed":
         raise HTTPException(status_code=400, detail="Product is not available for purchase")
 
-    if order_in.quantity > product.available_quantity:
-        raise HTTPException(status_code=400, detail=f"Requested quantity ({order_in.quantity}) exceeds available stock ({product.available_quantity})")
+    # Compute true current available stock
+    curr_total = product.quantity_total if product.quantity_total > 0 else product.available_quantity
+    available = curr_total - (product.quantity_reserved or 0.0) - (product.quantity_sold or 0.0)
+
+    if order_in.quantity > available:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Requested quantity ({order_in.quantity} {product.quantity_unit}) exceeds remaining available stock ({round(max(0.0, available), 2)} {product.quantity_unit})."
+        )
 
     farm = db.query(Farm).filter(Farm.id == product.farm_id).first()
     if farm.user_id == current_user.id:
@@ -88,6 +96,14 @@ def place_order(
         status="pending",
         farm_inspection_id=None
     )
+    # Update Stock Reservation (Change 8)
+    if not product.quantity_total or product.quantity_total <= 0:
+        product.quantity_total = product.available_quantity
+    product.quantity_reserved = (product.quantity_reserved or 0.0) + order_in.quantity
+    product.available_quantity = max(0.0, round(product.quantity_total - product.quantity_reserved - (product.quantity_sold or 0.0), 2))
+    if product.available_quantity <= 0:
+        product.status = "sold_out"
+
     db.add(order)
     db.commit()
     db.refresh(order)
@@ -187,6 +203,16 @@ def reject_order(
         raise HTTPException(status_code=409, detail=f"Cannot reject order in status '{order.status}'")
 
     order.status = "rejected"
+
+    # Release reserved stock (Change 8)
+    product = db.query(Product).filter(Product.id == order.product_id).first()
+    if product and product.quantity_reserved and product.quantity_reserved > 0:
+        product.quantity_reserved = max(0.0, round(product.quantity_reserved - order.quantity, 2))
+        curr_total = product.quantity_total if product.quantity_total > 0 else product.available_quantity
+        product.available_quantity = max(0.0, round(curr_total - product.quantity_reserved - (product.quantity_sold or 0.0), 2))
+        if product.available_quantity > 0 and product.status == "sold_out":
+            product.status = "listed"
+
     history = list(order.negotiation_history or [])
     history.append({
         "action": "rejected",

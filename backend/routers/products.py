@@ -16,7 +16,7 @@ from database import get_db
 from models.all_models import Product, Farm, QualityInspection, ProductionHistory, User, ProductType, Photo
 from schemas.schemas import ProductResponse
 from routers.auth import get_current_user, require_role
-from cv.inference import get_inference_engine
+from cv.inference import get_inference_engine, PRODUCT_CLASSES
 from services.geo import haversine_distance, geocode_irish_location
 from services.demand import get_product_demand
 from services.documents import UPLOADS_DIR, generate_quality_certificate_pdf
@@ -68,7 +68,7 @@ def create_product_listing(
 
     # Check if product is CV gradable (A4)
     prod_type_ref = db.query(ProductType).filter(ProductType.id == product_type.lower()).first()
-    is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
+    is_cv_gradable = (prod_type_ref.cv_gradable if prod_type_ref else True) and (product_type.lower() in PRODUCT_CLASSES)
 
     score = None
     grade = None
@@ -105,9 +105,10 @@ def create_product_listing(
 
     # 4. Create Quality Inspection record if gradable
     prod_date_obj = datetime.strptime(production_date, "%Y-%m-%d").date()
+    inspection = None
     inspection_id = None
 
-    if is_cv_gradable and cv_result:
+    if is_cv_gradable and cv_result and score is not None:
         inspection = QualityInspection(
             inspection_level="farm",
             image_url=image_url,
@@ -151,15 +152,19 @@ def create_product_listing(
         product_type=product_type.lower(),
         variety=variety,
         production_date=prod_date_obj,
+        quantity_total=available_quantity,
+        quantity_reserved=0.0,
+        quantity_sold=0.0,
         available_quantity=available_quantity,
         quantity_unit=quantity_unit.lower(),
         price_per_unit=price_per_unit,
         buyer_types_open_to=buyer_roles,
         provides_transport=provides_transport,
+        cv_grading_supported=is_cv_gradable,
         image_url=image_url,
         quality_grade=grade if is_cv_gradable else None,
         quality_score=score if is_cv_gradable else None,
-        quality_inspection_id=inspection.id if (is_cv_gradable and inspection) else None,
+        quality_inspection_id=inspection_id,
         demand_score=demand_info["demand_score"],
         demand_is_estimate=demand_info["is_estimate"],
         status="listed",

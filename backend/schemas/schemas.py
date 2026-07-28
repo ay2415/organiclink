@@ -25,6 +25,70 @@ class Token(BaseModel):
     name: str
 
 
+# --- Profile Schemas ---
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    town: Optional[str] = None
+    county: Optional[str] = None
+    eircode: Optional[str] = None
+    buyer_type: Optional[str] = None
+    business_name: Optional[str] = None
+    vat_number: Optional[str] = None
+    delivery_address: Optional[str] = None
+    typical_order_size: Optional[str] = None
+    # Farmer extra fields
+    farm_name: Optional[str] = None
+    size_hectares: Optional[float] = None
+    years_farming_organic: Optional[float] = None
+    organic_cert_body: Optional[str] = None
+    organic_cert_number: Optional[str] = None
+    cert_expiry_date: Optional[date] = None
+    produce_list: Optional[List[str]] = None
+    provides_own_transport: Optional[bool] = None
+
+
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    phone: Optional[str] = None
+    role: str
+    status: str
+    town: Optional[str] = None
+    county: Optional[str] = None
+    eircode: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    geocode_source: Optional[str] = None
+    buyer_type: Optional[str] = None
+    business_name: Optional[str] = None
+    vat_number: Optional[str] = None
+    delivery_address: Optional[str] = None
+    typical_order_size: Optional[str] = None
+    profile_photo_url: Optional[str] = None
+    created_at: datetime
+    farm: Optional[Dict[str, Any]] = None
+
+
+class PublicProfileResponse(BaseModel):
+    id: str
+    name: str
+    role: str
+    status: str
+    town: Optional[str] = None
+    county: Optional[str] = None
+    profile_photo_url: Optional[str] = None
+    verified: bool = True
+    reputation_score: float = 90.0
+    total_completed_orders: int = 0
+    average_quality_score: Optional[float] = None
+    member_since: datetime
+    farm: Optional[Dict[str, Any]] = None
+    recent_reviews: List[Dict[str, Any]] = []
+    active_listings: List[Dict[str, Any]] = []
+
+
 class FarmResponse(BaseModel):
     id: str
     user_id: str
@@ -35,18 +99,21 @@ class FarmResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     size_hectares: Optional[float] = None
+    years_farming_organic: Optional[float] = 0.0
+    provides_own_transport: Optional[bool] = True
     produce_list: List[str] = []
+    photo_urls: List[str] = []
     organic_cert_body: Optional[str] = None
     organic_cert_number: Optional[str] = None
     cert_issue_date: Optional[date] = None
     cert_expiry_date: Optional[date] = None
     cert_doc_url: Optional[str] = None
-    farm_type: str
+    farm_type: Optional[str] = "mixed"
     description: Optional[str] = None
     reputation_score: float = 100.0
     total_orders_completed: int = 0
     average_quality_score: Optional[float] = None
-    verified: bool
+    verified: bool = True
     created_at: datetime
 
     class Config:
@@ -59,8 +126,21 @@ class UserResponse(BaseModel):
     role: str
     name: str
     phone: Optional[str] = None
-    verified: bool
-    is_active: bool
+    town: Optional[str] = None
+    county: Optional[str] = None
+    eircode: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    geocode_source: Optional[str] = None
+    status: Optional[str] = "verified"
+    buyer_type: Optional[str] = None
+    business_name: Optional[str] = None
+    vat_number: Optional[str] = None
+    delivery_address: Optional[str] = None
+    typical_order_size: Optional[str] = None
+    profile_photo_url: Optional[str] = None
+    verified: bool = True
+    is_active: bool = True
     created_at: datetime
     farm: Optional[FarmResponse] = None
 
@@ -154,10 +234,12 @@ class ContractResponse(BaseModel):
     period: str
     price_per_unit: float
     collection_schedule: Optional[str] = None
+    quality_requirements: Optional[str] = None
     status: str
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     days_remaining: Optional[int] = None
+    fulfillment_percent: Optional[float] = 100.0
     created_at: datetime
 
     class Config:
@@ -182,6 +264,10 @@ class ProductResponse(BaseModel):
     price_per_unit: float
     buyer_types_open_to: List[str] = []
     provides_transport: bool
+    cv_grading_supported: bool = False
+    quantity_total: Optional[float] = None
+    quantity_reserved: Optional[float] = None
+    quantity_sold: Optional[float] = None
     image_url: Optional[str] = None
     quality_grade: Optional[str] = None
     quality_score: Optional[float] = None

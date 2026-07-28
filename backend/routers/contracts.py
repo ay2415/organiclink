@@ -49,7 +49,8 @@ def create_contract(
 @router.get("/farms/{farm_id}/contracts", response_model=List[ContractResponse])
 def list_farm_contracts(farm_id: str, db: Session = Depends(get_db)):
     from datetime import date
-    contracts = db.query(Contract).filter(Contract.farm_id == farm_id).all()
+    from models.all_models import ProductionLog
+    contracts = db.query(Contract).filter(Contract.farm_id == farm_id, Contract.is_deleted == False).all()
     today = date.today()
     res = []
     for c in contracts:
@@ -59,6 +60,16 @@ def list_farm_contracts(farm_id: str, db: Session = Depends(get_db)):
             c_res.days_remaining = days_rem
             if days_rem < 0:
                 c_res.status = "expired"
+
+        # Compute fulfillment to date against production logs
+        logged_sum = db.query(ProductionLog).filter(
+            ProductionLog.farm_id == farm_id,
+            ProductionLog.product_type == c.product_type
+        ).all()
+        total_logged = sum(l.quantity for l in logged_sum)
+        fulfillment = round(min(100.0, (total_logged / c.committed_quantity) * 100.0), 1) if c.committed_quantity > 0 else 100.0
+        c_res.fulfillment_percent = fulfillment
+
         res.append(c_res)
     return res
 
@@ -70,7 +81,7 @@ def update_contract(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    contract = db.query(Contract).filter(Contract.id == contract_id, Contract.is_deleted == False).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
     
@@ -106,6 +117,7 @@ def delete_contract(
     if farm.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    db.delete(contract)
+    # Soft delete (Change 7)
+    contract.is_deleted = True
     db.commit()
-    return {"message": "Contract deleted successfully"}
+    return {"message": "Contract soft-deleted successfully"}

@@ -18,6 +18,19 @@ class User(Base):
     role = Column(String(50), nullable=False, index=True) # farmer, consumer, retailer, restaurant, institution, manufacturer, admin
     name = Column(String(255), nullable=False)
     phone = Column(String(50), nullable=True)
+    town = Column(String(100), nullable=True)
+    county = Column(String(100), nullable=True)
+    eircode = Column(String(20), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geocode_source = Column(String(32), nullable=True) # eircode_routing_key, town_centroid, fallback
+    status = Column(String(50), default="verified", index=True) # pending, verified, suspended
+    buyer_type = Column(String(50), nullable=True) # Consumer, Retailer, Restaurant, Institution, Aggregator, Supermarket, CSA
+    business_name = Column(String(255), nullable=True)
+    vat_number = Column(String(100), nullable=True)
+    delivery_address = Column(Text, nullable=True)
+    typical_order_size = Column(String(100), nullable=True)
+    profile_photo_url = Column(String(500), nullable=True)
     verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -37,8 +50,11 @@ class Farm(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     size_hectares = Column(Float, nullable=True)
+    years_farming_organic = Column(Float, default=0.0)
+    provides_own_transport = Column(Boolean, default=True)
     produce_list = Column(JSON, default=list) # e.g. ["onion", "milk", "apple"]
-    organic_cert_body = Column(String(100), nullable=True) # e.g. Irish Organic Association, Organic Trust
+    photo_urls = Column(JSON, default=list) # up to 5 farm photos
+    organic_cert_body = Column(String(100), nullable=True) # e.g. IOA, Organic Trust, Demeter, Other
     organic_cert_number = Column(String(100), nullable=True)
     cert_issue_date = Column(Date, nullable=True)
     cert_expiry_date = Column(Date, nullable=True)
@@ -57,6 +73,8 @@ class Farm(Base):
     production_logs = relationship("ProductionLog", back_populates="farm", cascade="all, delete-orphan")
     contracts = relationship("Contract", back_populates="farm", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="farm", cascade="all, delete-orphan")
+    delivery_rules = relationship("DeliveryRule", back_populates="farm", uselist=False, cascade="all, delete-orphan")
+    delivery_slots = relationship("DeliverySlot", back_populates="farm", cascade="all, delete-orphan")
 
 
 class ProductionHistory(Base):
@@ -128,9 +146,13 @@ class Contract(Base):
     period = Column(String(20), default="month") # day, week, month
     price_per_unit = Column(Float, nullable=False)
     collection_schedule = Column(String(255), nullable=True)
+    quality_requirements = Column(Text, nullable=True)
+    hub_lat = Column(Float, nullable=True)
+    hub_lng = Column(Float, nullable=True)
     status = Column(String(50), default="active", index=True) # active, on_hold, expired
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
+    is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     farm = relationship("Farm", back_populates="contracts")
@@ -144,11 +166,15 @@ class Product(Base):
     product_type = Column(String(100), nullable=False, index=True)
     variety = Column(String(100), nullable=True)
     production_date = Column(Date, nullable=False)
+    quantity_total = Column(Float, nullable=False, default=0.0)
+    quantity_reserved = Column(Float, default=0.0)
+    quantity_sold = Column(Float, default=0.0)
     available_quantity = Column(Float, nullable=False)
     quantity_unit = Column(String(20), nullable=False) # kg, litre, box
     price_per_unit = Column(Float, nullable=False)
     buyer_types_open_to = Column(JSON, default=list) # e.g. ["consumer", "retailer", "restaurant"]
     provides_transport = Column(Boolean, default=False)
+    cv_grading_supported = Column(Boolean, default=False)
     image_url = Column(String(500), nullable=True)
     quality_grade = Column(String(5), nullable=True) # A, B, C, R
     quality_score = Column(Float, nullable=True)
@@ -163,6 +189,58 @@ class Product(Base):
 
     farm = relationship("Farm", back_populates="products")
     inspection = relationship("QualityInspection", foreign_keys=[quality_inspection_id])
+
+
+class DeliveryRule(Base):
+    __tablename__ = "delivery_rules"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    farmer_id = Column(String(36), ForeignKey("farms.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    delivers = Column(Boolean, default=True)
+    max_radius_km = Column(Integer, default=30)
+    min_order_value_eur = Column(Float, default=0.0)
+    min_order_qty = Column(Float, default=0.0)
+    delivery_fee_eur = Column(Float, default=0.0)
+    free_over_eur = Column(Float, nullable=True)
+    offers_pickup = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    farm = relationship("Farm", back_populates="delivery_rules")
+
+
+class DeliverySlot(Base):
+    __tablename__ = "delivery_slots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    farmer_id = Column(String(36), ForeignKey("farms.id", ondelete="CASCADE"), nullable=False, index=True)
+    slot_date = Column(Date, nullable=False, index=True)
+    start_time = Column(String(10), nullable=False) # e.g. "09:00"
+    end_time = Column(String(10), nullable=False)   # e.g. "13:00"
+    slot_type = Column(String(20), default="delivery") # delivery, pickup
+    pickup_location = Column(Text, nullable=True)
+    pickup_lat = Column(Float, nullable=True)
+    pickup_lng = Column(Float, nullable=True)
+    capacity_kg = Column(Float, default=100.0)
+    booked_kg = Column(Float, default=0.0)
+    zone_note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    farm = relationship("Farm", back_populates="delivery_slots")
+
+
+class DeliveryRun(Base):
+    __tablename__ = "delivery_runs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    farmer_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    slot_id = Column(String(36), ForeignKey("delivery_slots.id", ondelete="CASCADE"), nullable=True, index=True)
+    zone_name = Column(String(100), nullable=False) # e.g. "Limerick City Run"
+    zone_routing_key = Column(String(10), nullable=False, index=True) # e.g. "V94"
+    target_kg = Column(Float, default=50.0)
+    committed_kg = Column(Float, default=0.0)
+    status = Column(String(20), default="open", index=True) # open, confirmed, cancelled, delivered
+    closes_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class QualityInspection(Base):
