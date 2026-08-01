@@ -37,6 +37,7 @@ def create_product_listing(
     provides_transport: bool = Form(False),
     description: Optional[str] = Form(None),
     hours_active: int = Form(24),
+    is_bulk: bool = Form(False),
     image: UploadFile = File(...),
     current_user: User = Depends(require_role(["farmer", "admin"])),
     db: Session = Depends(get_db)
@@ -60,6 +61,7 @@ def create_product_listing(
     # 1. Save uploaded image
     ext = os.path.splitext(image.filename)[1] or ".jpg"
     filename = f"prod_{uuid.uuid4().hex}{ext}"
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     filepath = os.path.join(UPLOADS_DIR, filename)
     with open(filepath, "wb") as f:
         f.write(image.file.read())
@@ -73,28 +75,74 @@ def create_product_listing(
     score = None
     grade = None
     cv_result = None
+    bulk_summary = None
+    defects = []
 
     if is_cv_gradable:
-        # 2. Run Computer Vision Quality Grading for gradable produce
-        engine = get_inference_engine()
-        cv_result = engine.analyze_image(filepath, expected_product=product_type)
+        if is_bulk:
+            # PHASE 3: Bulk Two-Stage Grading Mode (5-Step Pipeline)
+            from cv.bulk_grading import grade_bulk
+            batch_res = grade_bulk(filepath, expected_product=product_type)
 
-        if cv_result.get("product_mismatch"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=cv_result.get("message", "Product mismatch detected.")
-            )
+            if batch_res.get("status") == "mismatch" or batch_res.get("product_mismatch"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=batch_res.get("message", f"Product Mismatch: This photo does not look like {product_type}.")
+                )
 
-        score = cv_result.get("quality_score", 0.0)
-        grade = cv_result.get("quality_grade", "N/A")
-        defects = cv_result.get("cv_breakdown", {}).get("detected_defects", [])
+            grade = batch_res.get("batch_grade", "C")
+            score = batch_res.get("weighted_quality_score", 70.0)
+            
+            bulk_summary = f"{batch_res.get('fresh_count', 0)} of {batch_res.get('matching_items_total', 1)} items fresh"
+            cv_result = {
+                "cv_breakdown": {
+                    "is_bulk": True,
+                    "batch_summary": bulk_summary,
+                    "total_items": batch_res.get('total_items_detected', 1),
+                    "matching_items": batch_res.get('matching_items_total', 1),
+                    "excluded_items": batch_res.get('excluded_items_count', 0),
+                    "fresh_count": batch_res.get('fresh_count', 0),
+                    "fresh_percent": batch_res.get('fresh_percent', 0.0),
+                    "defect_percent": batch_res.get('defect_percent', 0.0),
+                    "weighted_score": score,
+                    "ripeness_note": batch_res.get('ripeness_note'),
+                    "item_results": batch_res.get('item_results', []),
+                    "defective_items": batch_res.get('defective_items', [])
+                },
+                "quality_score": score,
+                "quality_grade": grade,
+            }
+
+            # Copy annotated image as the listing photo so it displays like any listing photo
+            import shutil
+            ann_path = batch_res.get("annotated_image_path", "")
+            if ann_path and os.path.exists(ann_path):
+                annotated_filename = f"bulk_ann_{uuid.uuid4().hex}.jpg"
+                annotated_filepath = os.path.join(UPLOADS_DIR, annotated_filename)
+                shutil.copy(ann_path, annotated_filepath)
+                image_url = f"/static/uploads/{annotated_filename}"
+
+        else:
+            # Single-Item Grading Mode (Preserved untouched)
+            engine = get_inference_engine()
+            cv_result = engine.analyze_image(filepath, expected_product=product_type)
+
+            if cv_result.get("product_mismatch"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=cv_result.get("message", "Product mismatch detected.")
+                )
+
+            score = cv_result.get("quality_score", 0.0)
+            grade = cv_result.get("quality_grade", "N/A")
+            defects = cv_result.get("cv_breakdown", {}).get("detected_defects", [])
 
         # 3. Listing Gate Enforcement: Grade R is REJECTED
         if grade == "R":
-            defect_str = ", ".join(defects) if defects else "severely damaged produce visual indicators"
+            msg = f"Bulk Batch Quality Inspection REJECTED (Grade R, {bulk_summary}). Only batches with >50% fresh items may be listed." if is_bulk else f"Produce Quality Inspection REJECTED (Grade R, Score {score:.1f}/100). Only produce of Grade A, B, or C may be listed."
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Produce Quality Inspection REJECTED (Grade R, Score {score:.1f}/100). Defects detected: {defect_str}. Only produce of Grade A, B, or C may be listed."
+                detail=msg
             )
 
     # Parse buyer types
@@ -161,6 +209,8 @@ def create_product_listing(
         buyer_types_open_to=buyer_roles,
         provides_transport=provides_transport,
         cv_grading_supported=is_cv_gradable,
+        is_bulk=is_bulk,
+        bulk_summary=bulk_summary,
         image_url=image_url,
         quality_grade=grade if is_cv_gradable else None,
         quality_score=score if is_cv_gradable else None,

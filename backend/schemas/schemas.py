@@ -265,6 +265,8 @@ class ProductResponse(BaseModel):
     buyer_types_open_to: List[str] = []
     provides_transport: bool
     cv_grading_supported: bool = False
+    is_bulk: bool = False
+    bulk_summary: Optional[str] = None
     quantity_total: Optional[float] = None
     quantity_reserved: Optional[float] = None
     quantity_sold: Optional[float] = None

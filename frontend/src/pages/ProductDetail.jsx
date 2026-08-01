@@ -135,6 +135,19 @@ const ProductDetail = () => {
             </div>
           </div>
 
+          {/* Bulk Batch Summary Banner */}
+          {product.is_bulk && product.bulk_summary && (
+            <div className="bg-gradient-to-r from-amber-500 to-emerald-600 text-white p-4 rounded-xl shadow-sm flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-100 block">YOLOv8 Two-Stage Bulk Inspection</span>
+                <span className="text-base font-extrabold">{product.bulk_summary}</span>
+              </div>
+              <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">
+                Batch Grade {product.quality_grade}
+              </span>
+            </div>
+          )}
+
           {/* Computer Vision Full Breakdown Panel */}
           {inspection && (
             <CVBreakdownPanel inspection={inspection} title="Farm Dispatch Computer Vision Analysis" />

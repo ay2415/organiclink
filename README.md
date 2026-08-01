@@ -1,35 +1,95 @@
-# OrganicLink — Irish Organic Farm Surplus Marketplace with Computer Vision Quality Grading
+# OrganicLink: A Computer-Vision Marketplace for Irish Organic Producers with Automated Produce Quality Grading
 
-[![Python 3.11](https://img.shields.io/badge/Backend-Python_3.11_|_FastAPI_|_SQLAlchemy_2.0-green.svg)](https://fastapi.tiangolo.com)
-[![PyTorch](https://img.shields.io/badge/CV_Engine-PyTorch_|_EfficientNet--B0_|_OpenCV-orange.svg)](https://pytorch.org)
+[![FastAPI](https://img.shields.io/badge/Backend-Python_3.11_|_FastAPI_|_SQLAlchemy_2.0-green.svg)](https://fastapi.tiangolo.com)
+[![PyTorch](https://img.shields.io/badge/CV_Engine-PyTorch_|_ResNet--18_Dual--Head-orange.svg)](https://pytorch.org)
+[![YOLOv8](https://img.shields.io/badge/Object_Detection-YOLOv8_5--Step_Bulk_Engine-yellow.svg)](https://ultralytics.com)
 [![React 18](https://img.shields.io/badge/Frontend-React_18_|_Vite_|_Tailwind_CSS-blue.svg)](https://vitejs.dev)
-[![Docker](https://img.shields.io/badge/Deployment-Docker_Compose-blue.svg)](https://www.docker.com)
+[![ReportLab](https://img.shields.io/badge/PDF_Engine-ReportLab_Quality_Certs_&_Invoices-red.svg)](https://www.reportlab.com)
+[![License](https://img.shields.io/badge/Thesis_Project-MSc_Computer_Science-purple.svg)](#)
 
-OrganicLink is a full-stack platform designed specifically for the Irish organic agricultural ecosystem. It connects certified Irish organic produce and dairy farmers with local buyers (consumers, retailers, farm-to-fork restaurants, institutions, and processors) to market surplus yield that exceeds fixed processor contracts.
+**OrganicLink** is a full-stack platform designed specifically for the Irish organic agricultural ecosystem. It connects certified Irish organic produce and dairy farmers with commercial buyers (retailers, farm-to-fork restaurants, institutions, aggregators, and consumers) to market surplus yield exceeding fixed processor contracts.
 
-The platform integrates a **Computer Vision (CV) Quality Engine** built on PyTorch (`EfficientNet-B0` backbone) and OpenCV. Produce quality is assessed at listing dispatch (`farm` level) and again upon arrival (`delivery` level). If quality degrades by more than **10.0%** in transit, an automated dispute is raised, payment is held in escrow, and platform administrators are notified for binding dispute resolution.
+The platform features an automated **5-Step YOLOv8 Two-Stage Computer Vision Quality Engine** combining deep learning classification with computer vision sub-metrics (`colour_vibrancy`, `colour_uniformity`, `brightness`, `defect_coverage_percent`). Quality is evaluated at listing dispatch (`farm` level) and upon arrival (`delivery` level). If quality degrades by more than **10.0%** in transit, an automated dispute is raised, payment is held in escrow, and platform administrators are alerted for binding resolution.
+
+---
+
+## Table of Contents
+1. [The Organic Surplus Problem](#the-organic-surplus-problem)
+2. [5-Step Bulk Produce Computer Vision Architecture](#5-step-bulk-produce-computer-vision-architecture)
+3. [System Architecture & Technology Stack](#system-architecture--technology-stack)
+4. [Model Evaluation & Dataset Metrics](#model-evaluation--dataset-metrics)
+5. [Key Platform Capabilities](#key-platform-capabilities)
+6. [Seeded Demonstration Login Credentials](#seeded-demonstration-login-credentials)
+7. [End-to-End Demonstration Walkthrough](#end-to-end-demonstration-walkthrough)
+8. [Installation & Setup Instructions](#installation--setup-instructions)
+9. [Key Technical & Architectural Decisions](#key-technical--architectural-decisions)
 
 ---
 
 ## The Organic Surplus Problem
 
-Irish organic farmers face strict processor contracts. For example:
-- A farmer produces **100 kg** of organic onions per month.
-- A retail aggregator contract commits **80 kg/month** (branded, bagged, and distributed to supermarkets).
-- This leaves **20 kg surplus per month** with no direct market channel — traditionally wasted or downgraded and sold cheaply as non-organic.
+Certified Irish organic farmers operate under strict processor and aggregator contracts. For example:
+- A farmer produces **100 kg** of organic tomatoes or apples per month.
+- A retail contract commits **80 kg/month** (graded, packed, and delivered to distribution hubs).
+- This leaves **20 kg surplus per month** with no direct market channel — traditionally wasted or sold as non-organic.
 
-OrganicLink models this exact business rule: `Surplus = Produced Yield - Contracted Volume`. The platform automatically suggests listing this 20 kg surplus to local buyers, preserving organic premium value and reducing food waste across Ireland.
+OrganicLink models this business logic: `Surplus = Produced Yield - Contracted Volume`. The platform automatically alerts farmers to list this surplus yield to local buyers within regional transport range, preserving organic premium value and reducing food waste across Ireland.
 
 ---
 
-## Technical Architecture
+## 5-Step Bulk Produce Computer Vision Architecture
+
+For bulk produce photos (e.g., crates of apples, tomatoes, potatoes), OrganicLink implements a **Two-Stage YOLOv8 + ResNet-18 Pipeline**:
+
+```
++---------------------------------------------------------------------------------------------------+
+|                                5-STEP BULK PRODUCE GRADING PIPELINE                               |
++---------------------------------------------------------------------------------------------------+
+|  STEP 1: DETECT                                                                                   |
+|  YOLOv8 item localization + Inner 75% Region Shrink (crop_shrink_factor=0.75)                     |
+|  Trims 12.5% outer edges off bounding boxes to eliminate neighbouring fruit pixel bleed.           |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|  STEP 2: RECOGNIZE + MATCH                                                                        |
+|  Evaluates crop against ResNet-18 Product Classifier. Compares predicted produce against selected |
+|  item (e.g. Tomato vs Orange). If mismatch >= 35% confidence, triggers Product Mismatch Rejection. |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|  STEP 3: GRADE                                                                                    |
+|  Evaluates matching crops using ResNet-18 Defect Head (fresh, minor_defect, major_defect) +       |
+|  OpenCV sub-metrics (colour_vibrancy, colour_uniformity, defect_coverage_percent).                |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|  STEP 4: AGGREGATE                                                                                |
+|  Computes batch weighted score: (Fresh*1.0 + Minor*0.6 + Major*0.0) / Matching_Total * 100        |
+|  Batch Grade Rules: >= 90% Grade A | >= 75% Grade B | >= 50% Grade C | < 50% Grade R (Rejected).    |
++---------------------------------------------------------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|  STEP 5: RIPENESS & ANNOTATED RENDER                                                              |
+|  Summarizes ripeness notes (e.g., Fully-ripe, Semi-ripe for tomatoes) and renders dual-box image  |
+|  (Outer detector box: Green=Fresh, Yellow=Minor, Red=Major; Inner white box: 75% crop boundary).   |
++---------------------------------------------------------------------------------------------------+
+```
+
+---
+
+## System Architecture & Technology Stack
 
 ```
                                     ORGANICLINK SYSTEM ARCHITECTURE
-                                    
+
   +---------------------------------------------------------------------------------------------------+
   |                                        REACT 18 + VITE FRONTEND                                   |
   |  Farmer Dashboard | Surplus Assistant | Marketplace Feed | CV Breakdown Panel | Dispute Resolution |
+  |  CameraOrUploadInput Component (WebRTC Live Viewfinder Modal + Native File Picker Fallback)       |
   +---------------------------------------------------------------------------------------------------+
                                                       |  HTTP / REST API (Axios + JWT)
                                                       v
@@ -42,120 +102,116 @@ OrganicLink models this exact business rule: `Surplus = Produced Yield - Contrac
          v                                v                                   v
   +---------------+              +--------------------+              +--------------------+
   | DATABASE LAYER|              | COMPUTER VISION CV |              | PDF DOCUMENTS SVC  |
-  | PostgreSQL 15 |              | PyTorch EffNet-B0  |              | ReportLab Engine   |
-  | SQLAlchemy 2.0|              | OpenCV Sub-metrics |              | Quality Certs      |
-  | Alembic Migr. |              | Dual-Grade Variance|              | Invoices + Summary |
+  | PostgreSQL 15 |              | PyTorch ResNet-18  |              | ReportLab Engine   |
+  | SQLAlchemy 2.0|              | YOLOv8 Detector    |              | Quality Certs      |
+  | Optimistic Lock|             | Dynamic Auto-Reload|              | Invoices + Summary |
   +---------------+              +--------------------+              +--------------------+
 ```
 
----
-
-## Features & Core Capabilities
-
-- **Organic Certification as First-Class Concept:** Every farm profile, product card, and PDF document embeds verified Irish organic certification details (IOA / Organic Trust).
-- **Offline Irish Geo & Haversine Distance:** Offline lookup table covering 60+ Irish towns and Eircode routing keys (`seed/irish_locations.py`) calculating exact distance in km without third-party paid APIs.
-- **Dual-Inspection CV Quality Grading:** PyTorch transfer-learning classifier combined with OpenCV visual sub-metrics (`colour_vibrancy`, `colour_uniformity`, `brightness`, `defect_coverage_percent`).
-- **Listing Gate Enforcement:** Produce of Grade A (≥85), B (70–84), or C (50–69) is accepted. Grade R (<50) is automatically rejected at listing time with explanatory defect feedback.
-- **The ±10% Quality Variance Rule:**
-  $$\text{Variance \%} = \left( \frac{\text{Farm Score} - \text{Delivery Score}}{\text{Farm Score}} \right) \times 100$$
-  - $\le 10.00\%$: **PASS** $\rightarrow$ Order marked `delivered`, invoice generated, payment pending.
-  - $> 10.00\%$: **DISPUTE** $\rightarrow$ Order marked `disputed`, payment held in escrow, admin notified.
-- **Hybrid Market Demand Indicator:** Uses real 30-day activity (searches + orders $\ge 5$) for live demand scores, or falls back to an Irish seasonal growing baseline with an explicit **"Seasonal estimate"** tag in the UI.
-- **Farmer Reputation Formula:**
-  $$\text{Reputation} = 0.40(\text{Stars} \times 20) + 0.30(\text{Mean Quality}) + 0.20(\text{On-Time \%}) + 0.10(100 - \text{Dispute \%})$$
-- **Immutable Audit Logging:** Insert-only `audit_logs` table tracking every state machine transition.
+### Core Technologies:
+- **Backend Framework**: Python 3.11, FastAPI, SQLAlchemy 2.0, Pydantic v2.
+- **Computer Vision & ML**: PyTorch, Torchvision, Ultralytics YOLOv8, OpenCV, ImageHash (Phash De-duplication).
+- **Frontend Framework**: React 18, Vite, Tailwind CSS, Lucide Icons, Axios.
+- **Document Generation**: ReportLab PDF Engine (Certificates & Invoices).
+- **Database**: PostgreSQL 15 / SQLite (Development).
 
 ---
 
-## Computer Vision Training & Evaluation
+## Model Evaluation & Dataset Metrics
 
-The CV model is trained using PyTorch with an `EfficientNet-B0` backbone pretrained on ImageNet. Early layers are frozen, and the final classification head is retrained on three target classes: `fresh`, `minor_defect`, `major_defect`.
+The core classifier model (`backend/cv/models/grading_model.pt`) was trained using a **ResNet-18 Dual-Head Architecture** on **48,817 produce images** with a near-duplicate grouped split (`step1_dedupe_split.py`) to prevent train/validation data leakage.
 
-If no dataset is present, `backend/cv/train.py` automatically generates a synthetic bootstrap produce dataset (900 images across classes with varying defect spot coverage) so the system runs immediately.
+### Validation Results (9,763 Held-Out Images):
 
-### Model Evaluation Report Location
-- `backend/cv/models/eval_report.json`
-- `backend/cv/models/eval_report.txt`
+| Evaluation Metric | Result | Held-Out Sample |
+| :--- | :--- | :--- |
+| **Product Classification Accuracy** | **99.33%** | 9,763 Images |
+| **Product Macro F1-Score** | **0.9250** | 16 Produce Classes |
+| **Quality Grading Accuracy** | **99.40%** | Fresh, Minor Defect, Major Defect |
+| **Quality Macro F1-Score** | **0.9898** | Clean Grouped Split |
 
-### Swapping Synthetic Bootstrap for Real Produce Dataset
-To train on a real produce dataset (e.g., Kaggle Fresh & Rotten Fruits/Vegetables):
-1. Place labeled images into `backend/cv/data/train/{fresh,minor_defect,major_defect}/` and `backend/cv/data/val/{fresh,minor_defect,major_defect}/`.
-2. Run the training script:
-   ```bash
-   python backend/cv/train.py
-   ```
-3. The new weights (`quality_model.pt`) and evaluation report will be updated automatically.
+### Verified Produce Classes (16):
+`apple`, `banana`, `bitter_gourd`, `capsicum`, `carrot`, `cucumber`, `grape`, `guava`, `jujube`, `lime`, `mango`, `orange`, `pomegranate`, `potato`, `strawberry`, `tomato`.
 
 ---
 
-## Seeded Login Credentials
+## Key Platform Capabilities
 
-All non-admin users share the password: `Password123!`
+1. **Dual Camera Options Everywhere (`CameraOrUploadInput.jsx`)**:
+   - Every photo upload form (Stock Listing, Farm Inspection, Delivery Inspection, Profile/Certificate Upload) provides side-by-side **Snap Camera 📸** (interactive live WebRTC viewfinder modal) and **Choose File 📁** (native file manager/gallery picker).
+2. **Eircode Location Privacy**:
+   - Displays exact Irish 3-character Routing Keys (e.g. `T12`) publicly on listings. Exact Eircode bytes are hidden until an order is accepted.
+3. **Haversine Distance & Regional Pooled Transport**:
+   - Calculates distance in km offline using a 60+ Irish location coordinate database (`seed/irish_locations.py`). Groups orders by county/hub for bulk regional transport runs.
+4. **The ±10% Quality Variance Rule**:
+   $$\text{Variance \%} = \left( \frac{\text{Farm Score} - \text{Delivery Score}}{\text{Farm Score}} \right) \times 100$$
+   - $\le 10.00\%$: **PASS** $\rightarrow$ Order marked `delivered`, invoice PDF generated, payment released.
+   - $> 10.00\%$: **DISPUTE** $\rightarrow$ Order marked `disputed`, payment held in escrow, admin dispute raised.
+5. **Stock Reservation Concurrency Control**:
+   - Uses optimistic locking to prevent double-selling of surplus stock under concurrent buyer claims, returning clean `HTTP 409 Conflict` errors.
+6. **ReportLab PDF Certificate & Invoice Engine**:
+   - Generates official PDF Quality Certificates (`cert_XXXX.pdf`) and Invoices with embedded CV quality summaries (`inv_XXXX.pdf`).
 
-| Role | Name | Email | Password | Details |
-|------|------|-------|----------|---------|
-| **Admin** | System Admin | `admin@organiclink.ie` | `Admin123!` | Dispute resolution queue & audit logs |
-| **Farmer (Onion)** | Sean O'Mahony | `farmer@corkorganic.ie` | `Password123!` | **Glenbeg Organic Farm (100kg yield - 80kg contract = 20kg surplus)** |
+---
+
+## Seeded Demonstration Login Credentials
+
+All seeded accounts use the standard test password: `Password123!` (Admin uses `Admin123!`).
+
+| Role | Name | Email | Password | Business Detail |
+| :--- | :--- | :--- | :--- | :--- |
+| **Admin** | System Admin | `admin@organiclink.ie` | `Admin123!` | Dispute resolution queue & platform audit logs |
+| **Farmer (Produce)** | Sean O'Mahony | `farmer.cork1@organiclink.ie` | `Password123!` | **Glenbeg Organic Farm (Cork, 100kg yield - 80kg contract = 20kg surplus)** |
+| **Retailer** | Bandon Farm Shop | `retail.cork1@organiclink.ie` | `Password123!` | Organic shop / deli commercial buyer (Bandon, Co. Cork) |
 | **Farmer (Dairy)** | Aoife Flaherty | `galway.dairy@organic.ie` | `Password123!` | Corrib Organic Dairy (Tuam, Co. Galway) |
 | **Farmer (Mixed)** | Liam Ryan | `tipp.produce@organic.ie` | `Password123!` | Golden Vale Organic Produce (Nenagh, Co. Tipperary) |
-| **Consumer** | Mary Fitzgerald | `consumer1@organic.ie` | `Password123!` | Small volume individual buyer |
-| **Retailer** | Bandon Farm Shop | `retail1@farmshop.ie` | `Password123!` | Organic shop / deli buyer |
+| **Consumer** | Mary Fitzgerald | `consumer1@organic.ie` | `Password123!` | Individual organic buyer |
 | **Restaurant** | Wild Plum Bistro | `rest1@bistro.ie` | `Password123!` | Farm-to-Fork restaurant |
 | **Institution** | St. Patrick's College | `inst1@school.ie` | `Password123!` | School canteen bulk buyer |
-| **Manufacturer** | Kerry Organic Foods | `mfg1@processor.ie` | `Password123!` | Processor / contract holder |
+| **Manufacturer** | Kerry Organic Foods | `mfg1@processor.ie` | `Password123!` | Organic processor / contract holder |
 
 ---
 
-## Demo Walkthrough Instructions
+## End-to-End Demonstration Walkthrough
 
-1. **Surplus Calculation:**
-   - Log in as `farmer@corkorganic.ie` (`Password123!`).
-   - Navigate to `/farmer/dashboard`. Observe the Surplus Assistant card showing: **"You produced 100kg onions, 80kg is committed — list your 20kg surplus."**
+1. **Surplus Calculation**:
+   - Log in as `farmer.cork1@organiclink.ie` (`Password123!`).
+   - Navigate to `/farmer/dashboard`. Review the Surplus Assistant card showing: **"You produced 100kg tomatoes, 80kg is committed — list your 20kg surplus."**
 
-2. **CV Produce Quality Listing:**
-   - Click **"List Surplus"** or navigate to `/farmer/listings/new`.
-   - Select an image. Click **"Run Instant CV Quality Analysis"**.
-   - Review the CV score, grade, and OpenCV sub-metrics breakdown panel. Click **"Publish Certified Surplus Listing"**.
+2. **CV Quality Analysis & Stock Listing**:
+   - Click **"List Surplus"** (`/farmer/listings/new`).
+   - Select **Tomato** from the verified bulk produce dropdown.
+   - Click **"Snap Camera 📸"** or **"Choose File 📁"** to load a produce photo.
+   - Click **"Run CV Quality Inspection"**. Observe the YOLOv8 5-step analysis, inner 75% crop bounding boxes, and score breakdown.
+   - Click **"Publish Certified Surplus Listing"**.
 
-3. **Marketplace & Haversine Distance Search:**
-   - Log in as a buyer (`rest1@bistro.ie`).
-   - Navigate to `/marketplace`. Filter by product type, county, or distance. Notice distance in km computed from farm Eircodes.
+3. **Marketplace Search & Haversine Distance Filter**:
+   - Log in as buyer `rest1@bistro.ie` (`Password123!`).
+   - Navigate to `/marketplace`. Filter by produce category, county, or distance in km calculated from farm Eircode routing keys.
 
-4. **Order Negotiation & State Machine:**
-   - Select a produce listing, fill out the order form, and click **"Place Surplus Order"**.
-   - Negotiate a counter-offer or accept as farmer.
+4. **Order Placement & Stock Reservation**:
+   - Select the published produce listing, specify order quantity, and submit order.
 
-5. **Dispatch & Delivery Photo Quality Audit (±10% Rule):**
-   - **Quality Gate:** Attempting to dispatch without a farm photo returns HTTP 409 Conflict.
-   - Farmer uploads dispatch photo $\rightarrow$ order status becomes `quality_verified` $\rightarrow$ farmer dispatches (`in_transit`).
-   - Buyer uploads delivery photo:
+5. **Dispatch & Delivery Quality Verification (±10% Rule)**:
+   - Farmer uploads dispatch photo $\rightarrow$ order status transitions to `quality_verified` $\rightarrow$ farmer dispatches (`in_transit`).
+   - Buyer uploads delivery arrival photo:
      - If variance $\le 10\%$: status becomes `delivered`, invoice PDF is generated.
-     - If variance $> 10\%$: status becomes `disputed`, payment is held, and an open dispute is raised.
+     - If variance $> 10\%$: status becomes `disputed`, payment held in escrow, admin alerted.
 
-6. **Admin Dispute Resolution:**
+6. **Admin Dispute Resolution Queue**:
    - Log in as `admin@organiclink.ie` (`Admin123!`).
-   - Navigate to `/admin`. Review the open dispute displaying side-by-side farm vs delivery photos and score comparison.
-   - Select resolution (e.g. Partial Payment), enter rationale, and click **"Execute Binding Dispute Resolution"**.
+   - Navigate to `/admin`. Review side-by-side dispatch vs delivery photo comparison and score variance.
+   - Execute binding resolution with rationale (e.g., Partial Refund or Escrow Release).
 
 ---
 
-## Setup & Running the Application
+## Installation & Setup Instructions
 
-### Option 1: Docker Compose (Recommended)
-
-```bash
-# Build and launch PostgreSQL, Backend, and Frontend containers
-docker-compose up --build
-```
-- **Backend OpenAPI Docs:** `http://localhost:8000/docs`
-- **Frontend App:** `http://localhost:5173`
-
-### Option 2: Local Development Setup
-
-#### Backend:
+### Backend Setup:
 ```bash
 cd backend
 python -m venv venv
+
 # On Windows:
 .\venv\Scripts\activate
 # On Linux/macOS:
@@ -163,29 +219,37 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 python -m seed.seed_data
-uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### Frontend:
+### Frontend Setup:
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 5174
 ```
 
-#### Automated Tests:
-```bash
-cd backend
-pytest -v
+### Mobile Phone Access:
+To test on a mobile device connected to your machine's network/hotspot:
+Open Chrome/Safari on your mobile phone and enter:
+```text
+http://<YOUR_LOCAL_IP>:5174
 ```
 
 ---
 
-## Key Design Decisions & Assumptions
+## Key Technical & Architectural Decisions
 
-1. **Visual Grading Not Applicable for Liquid Dairy (Milk):** Quality indicators for milk (bacterial count, somatic cells, fat and protein content) are invisible to a camera. Photographing milk grades nothing. OrganicLink maintains a per-product-type flag (`cv_gradable`). When `cv_gradable = false` (e.g. Milk & liquid dairy), the listing flow skips CV quality scoring, displays **"Visual grading not applicable"**, and publishes immediately. Order delivery bypasses CV variance checks.
-2. **Organic Status Established via Human Verification, Not Model:** Organic status is a matter of legal certification, not appearance — organic and conventional produce of the same variety are visually identical. The computer vision model therefore grades **quality only** (blemishes, rot, discolouration). Organic provenance is established separately through official certification documents verified by an administrator.
-3. **No Payment Processing — Bank Transfer Status Tracking Only:** There is no payment gateway or card processing. Payments take place directly between buyer and farmer via bank transfer outside the platform. The platform records settlement status using a two-step confirmation flow: Buyer marks *"Payment Sent"*, Farmer marks *"Payment Received"* $\rightarrow$ status becomes `paid`.
-4. **Offline Irish Geo Lookup:** To guarantee 100% reliability without third-party API rate limits, Eircodes and Irish town names are geocoded using an offline lookup dictionary covering 60+ locations (`seed/irish_locations.py`).
-5. **Real-World Computer Vision & Kaggle Datasets:** Uses PyTorch transfer learning (`ResNet18` backbone) with multi-head classification. Supports Kaggle datasets combining studio and mobile phone photos (`muhammad0subhan/fruit-and-vegetable-disease-healthy-vs-rotten`). Evaluation metrics are saved to `backend/cv/models/eval_report.json` and `eval_report.txt`.
+1. **Visual Grading Excluded for Liquid Dairy (Milk)**:
+   - Chemical quality indicators for milk (bacterial count, fat/protein content) cannot be measured visually by a camera. OrganicLink uses a per-product flag (`cv_gradable`). Milk listings display **"Visual grading not applicable"** and bypass visual variance checks.
+2. **Legal Provenance vs. Visual Grading**:
+   - Organic status is a legal certification attribute (IOA/Organic Trust), not a visual property. The CV engine evaluates physical quality (blemishes, rot, discolouration), while organic authenticity is validated via document verification by platform administrators.
+3. **Dynamic Model Synchronization**:
+   - `backend/cv/inference.py` monitors file modification timestamps on `grading_model.pt`. When background training updates model weights, the FastAPI backend auto-reloads the newest checkpoint without service restart.
+4. **Offline Location Resolution**:
+   - Eircodes and Irish locations are resolved via an offline lookup module (`seed/irish_locations.py`) covering 60+ Irish towns to ensure complete reliability without third-party API dependencies.
 
+---
+
+### License & Thesis Notice
+Developed for MSc Computer Science Thesis. All rights reserved.

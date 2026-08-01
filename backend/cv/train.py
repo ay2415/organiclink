@@ -36,7 +36,7 @@ ARCHIVE_DIR = os.path.join(BASE_DIR, "archive")
 QUALITY_DATASET_DIR = os.path.join(BASE_DIR, "quality dataset")
 DISEASES_DATASET_DIR = os.path.join(BASE_DIR, "Fruit And Vegetable Diseases Dataset")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-MODEL_PATH = os.path.join(MODELS_DIR, "quality_model.pt")
+MODEL_PATH = os.path.join(MODELS_DIR, "grading_model.pt")
 REPORT_JSON_PATH = os.path.join(MODELS_DIR, "eval_report.json")
 REPORT_TXT_PATH = os.path.join(MODELS_DIR, "eval_report.txt")
 
@@ -89,14 +89,12 @@ class MultiHeadProduceModel(nn.Module):
         return self.product_head(features), self.defect_head(features)
 
 
-def parse_labels_from_folder(folder_name: str):
+def parse_labels_from_path(full_path: str):
     """
-    Parse (product, defect) from the IMMEDIATE folder name only.
-
+    Parse (product, defect) from the file path and folder name.
     Returns (product_index, defect_index) or (None, None) if unparseable.
-    Unparseable samples are SKIPPED - never silently relabelled.
     """
-    name = folder_name.lower().replace("-", "_").replace("  ", " ").strip()
+    name = full_path.lower().replace("-", "_").replace("\\", "/").replace("  ", " ").strip()
 
     # --- product ---
     product_idx = None
@@ -105,8 +103,6 @@ def parse_labels_from_folder(folder_name: str):
             product_idx = PRODUCT_CLASSES.index(canonical)
             break
     if product_idx is None:
-        # Longest match first so "bitter_gourd" beats nothing and
-        # short names don't win by accident.
         for p in sorted(PRODUCT_CLASSES, key=len, reverse=True):
             if p in name or p.replace("_", " ") in name:
                 product_idx = PRODUCT_CLASSES.index(p)
@@ -149,16 +145,16 @@ class ProduceDataset(Dataset):
                 if not image_files:
                     continue
 
-                folder_name = os.path.basename(root)
-                prod_idx, def_idx = parse_labels_from_folder(folder_name)
-
-                if prod_idx is None or def_idx is None:
-                    self.skipped += len(image_files)
-                    skipped_folders[folder_name] += len(image_files)
-                    continue
-
                 for fname in image_files:
-                    self.samples.append((os.path.join(root, fname), prod_idx, def_idx))
+                    full_p = os.path.join(root, fname)
+                    prod_idx, def_idx = parse_labels_from_path(full_p)
+
+                    if prod_idx is None or def_idx is None:
+                        self.skipped += 1
+                        skipped_folders[os.path.basename(root)] += 1
+                        continue
+
+                    self.samples.append((full_p, prod_idx, def_idx))
 
         if skipped_folders:
             print("\n  Skipped folders (labels could not be parsed):")
@@ -296,13 +292,16 @@ def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4, resume=F
               "PRODUCT_CLASSES or add data.\n")
 
     train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
+        transforms.RandomResizedCrop(224, scale=(0.6, 1.0)),
         transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(p=0.2),
-        transforms.RandomRotation(20),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.05),
+        transforms.RandomVerticalFlip(p=0.3),
+        transforms.RandomRotation(30),
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+        transforms.RandomApply([transforms.GaussianBlur(3)], p=0.2),
+        transforms.RandomGrayscale(p=0.05),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.RandomErasing(p=0.2, scale=(0.02, 0.15)),
     ])
 
     # IMPORTANT: inference.py must use EXACTLY this transform.
@@ -336,15 +335,14 @@ def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4, resume=F
         except Exception as e:
             print(f"Could not resume ({e}); starting fresh.")
 
-    # Class weights so rare classes are not ignored
-    prod_weights = torch.tensor(
-        [len(full_dataset) / (len(PRODUCT_CLASSES) * max(prod_counts.get(i, 1), 1))
-         for i in range(len(PRODUCT_CLASSES))], dtype=torch.float32
-    ).to(device)
-    def_weights = torch.tensor(
-        [len(full_dataset) / (len(DEFECT_CLASSES) * max(def_counts.get(i, 1), 1))
-         for i in range(len(DEFECT_CLASSES))], dtype=torch.float32
-    ).to(device)
+    # Class weights with weight capping (cap=5.0) to prevent instability
+    raw_prod_weights = [len(full_dataset) / (len(PRODUCT_CLASSES) * max(prod_counts.get(i, 1), 1))
+                        for i in range(len(PRODUCT_CLASSES))]
+    raw_def_weights = [len(full_dataset) / (len(DEFECT_CLASSES) * max(def_counts.get(i, 1), 1))
+                       for i in range(len(DEFECT_CLASSES))]
+
+    prod_weights = torch.tensor([min(w, 5.0) for w in raw_prod_weights], dtype=torch.float32).to(device)
+    def_weights = torch.tensor([min(w, 5.0) for w in raw_def_weights], dtype=torch.float32).to(device)
 
     criterion_prod = nn.CrossEntropyLoss(weight=prod_weights)
     criterion_def = nn.CrossEntropyLoss(weight=def_weights)
@@ -366,7 +364,8 @@ def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4, resume=F
 
             optimizer.zero_grad()
             prod_logits, def_logits = model(images)
-            loss = criterion_prod(prod_logits, prod_labels) + criterion_def(def_logits, def_labels)
+            # Favour PRODUCT head (1.5x) as it is weak, 1.0x for defect head
+            loss = (1.5 * criterion_prod(prod_logits, prod_labels) + 1.0 * criterion_def(def_logits, def_labels))
             loss.backward()
             optimizer.step()
 
@@ -397,7 +396,9 @@ def run_training_pipeline(epochs=25, batch_size=32, learning_rate=3e-4, resume=F
 
         if val_score > best_val_score:
             best_val_score = val_score
-            torch.save(model.state_dict(), MODEL_PATH)
+            tmp_path = MODEL_PATH + ".tmp"
+            torch.save(model.state_dict(), tmp_path)
+            os.replace(tmp_path, MODEL_PATH)
             print(f"   -> saved best checkpoint (val {val_score:.1f}%)")
 
     # Final evaluation with the best weights

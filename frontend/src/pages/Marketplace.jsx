@@ -140,7 +140,7 @@ const Marketplace = () => {
                         <GradeBadge grade={prod.quality_grade} score={prod.quality_score} />
                       </div>
                       <div className="absolute bottom-3 left-3 bg-emerald-950/80 backdrop-blur-sm text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> 100% Certified Organic
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> {prod.is_bulk ? `Bulk Batch (${prod.bulk_summary || 'Multi-Item'})` : '100% Certified Organic'}
                       </div>
                     </div>
 

@@ -1,9 +1,10 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
 import CVBreakdownPanel from '../components/CVBreakdownPanel';
-import { PlusCircle, Upload, CheckCircle2, AlertTriangle } from 'lucide-react';
+import CameraOrUploadInput from '../components/CameraOrUploadInput';
+import { PlusCircle, Upload, CheckCircle2, AlertTriangle, Camera, X } from 'lucide-react';
 
 const FarmerNewListing = () => {
   const { user } = useContext(AuthContext);
@@ -18,6 +19,7 @@ const FarmerNewListing = () => {
   const [pricePerUnit, setPricePerUnit] = useState(2.20);
   const [hoursActive, setHoursActive] = useState(24);
   const [providesTransport, setProvidesTransport] = useState(true);
+  const [isBulk, setIsBulk] = useState(true);
   const [description, setDescription] = useState('Certified organic surplus available for immediate delivery.');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -25,6 +27,58 @@ const FarmerNewListing = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [cvResult, setCvResult] = useState(null);
+
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const videoRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const [mediaStream, setMediaStream] = useState(null);
+
+  const startCamera = async () => {
+    try {
+      setShowCameraModal(true);
+      setError('');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      setMediaStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setError("Unable to access camera. Please allow camera permissions or use file upload.");
+      setShowCameraModal(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      setMediaStream(null);
+    }
+    setShowCameraModal(false);
+  };
+
+  const capturePhotoFromCamera = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `camera_snap_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setImageFile(file);
+        setImagePreview(URL.createObjectURL(file));
+        setCvResult(null);
+        setError('');
+      }
+      stopCamera();
+    }, 'image/jpeg', 0.92);
+  };
 
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -49,11 +103,18 @@ const FarmerNewListing = () => {
       formData.append('image', imageFile);
       formData.append('inspection_level', 'farm');
       formData.append('product_type', productType);
+      formData.append('is_bulk', isBulk);
 
       const res = await api.post('/api/quality/analyze', formData);
+      if (res.data.analysis?.product_mismatch) {
+        setError(res.data.analysis.message || 'Product mismatch detected.');
+        setCvResult(null);
+        return;
+      }
       setCvResult(res.data.analysis);
     } catch (err) {
-      setError('Failed to analyze produce photo.');
+      setError(err.response?.data?.detail || 'Failed to analyze produce photo.');
+      setCvResult(null);
     } finally {
       setSubmitting(false);
     }
@@ -80,6 +141,7 @@ const FarmerNewListing = () => {
       formData.append('price_per_unit', pricePerUnit);
       formData.append('hours_active', hoursActive);
       formData.append('provides_transport', providesTransport);
+      formData.append('is_bulk', isBulk);
       formData.append('description', description);
       formData.append('buyer_types_open_to', JSON.stringify(['consumer', 'retailer', 'restaurant', 'institution', 'manufacturer']));
       formData.append('image', imageFile);
@@ -126,14 +188,22 @@ const FarmerNewListing = () => {
                 }}
                 className="w-full border p-2.5 rounded-lg font-semibold"
               >
-                <option value="apple">Organic Apple</option>
-                <option value="banana">Organic Banana</option>
-                <option value="bitter_gourd">Organic Bitter Gourd</option>
-                <option value="capsicum">Organic Capsicum</option>
-                <option value="milk">Organic Raw Milk</option>
-                <option value="orange">Organic Orange</option>
-                <option value="tomato">Organic Tomato</option>
-                <option value="carrot">Organic Carrot</option>
+                <optgroup label="🌟 Verified High-Accuracy Produce Crops">
+                  <option value="tomato">Organic Tomato</option>
+                  <option value="apple">Organic Apple</option>
+                  <option value="banana">Organic Banana</option>
+                  <option value="mango">Organic Mango</option>
+                  <option value="orange">Organic Orange</option>
+                  <option value="capsicum">Organic Capsicum / Bell Pepper</option>
+                  <option value="guava">Organic Guava</option>
+                  <option value="potato">Organic Potato</option>
+                </optgroup>
+
+                <optgroup label="🥛 Non-CV & Milk Declarations">
+                  <option value="milk">Organic Raw Milk (Declaration Only)</option>
+                  <option value="onion">Organic Onion (Non-CV)</option>
+                  <option value="spinach">Organic Spinach / Leafy Greens (Non-CV)</option>
+                </optgroup>
               </select>
             </div>
 
@@ -170,6 +240,19 @@ const FarmerNewListing = () => {
               <label className="font-bold text-gray-700 block mb-1">Hours Active</label>
               <input type="number" step="1" value={hoursActive} onChange={e => setHoursActive(parseInt(e.target.value))} className="w-full border p-2.5 rounded-lg" />
             </div>
+
+            <div className="sm:col-span-3 bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 flex items-center justify-between mt-2">
+              <div>
+                <span className="font-bold text-emerald-950 text-xs block">Bulk / Multiple Items Mode (YOLOv8 Two-Stage Pipeline)</span>
+                <span className="text-[11px] text-emerald-700 block">Check this if your photo contains a batch/tray of multiple items. Items are localized with YOLO and graded individually.</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={isBulk}
+                onChange={e => setIsBulk(e.target.checked)}
+                className="w-5 h-5 accent-emerald-600 rounded cursor-pointer"
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-2 pt-2">
@@ -183,17 +266,16 @@ const FarmerNewListing = () => {
           <h3 className="font-bold text-gray-900 text-sm border-b pb-2">2. Computer Vision Quality Photo Upload</h3>
 
           <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="w-full sm:w-1/2 border-2 border-dashed border-emerald-200 bg-emerald-50/50 rounded-2xl p-6 text-center">
-              {imagePreview ? (
-                <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg object-cover shadow" />
-              ) : (
-                <div className="space-y-2">
-                  <Upload className="w-10 h-10 text-emerald-600 mx-auto" />
-                  <span className="text-xs font-bold text-gray-700 block">Upload Produce Photo</span>
-                  <span className="text-[10px] text-gray-500 block">JPG / PNG format, max 10MB</span>
-                </div>
-              )}
-              <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 text-xs mx-auto" />
+            <div className="w-full sm:w-1/2 border-2 border-dashed border-emerald-200 bg-emerald-50/50 rounded-2xl p-5 text-center">
+              <CameraOrUploadInput
+                currentPreview={imagePreview}
+                onFileSelected={(file) => {
+                  setImageFile(file);
+                  setImagePreview(URL.createObjectURL(file));
+                  setCvResult(null);
+                  setError('');
+                }}
+              />
             </div>
 
             <div className="w-full sm:w-1/2 space-y-3">
@@ -234,6 +316,8 @@ const FarmerNewListing = () => {
           <CheckCircle2 className="w-5 h-5" /> Publish Certified Available Listing
         </button>
       </form>
+
+
     </div>
   );
 };

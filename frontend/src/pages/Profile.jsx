@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import api from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
-import { User, MapPin, Building, ShieldCheck, Award, FileText, Upload, CheckCircle, Truck, Phone, Mail } from 'lucide-react';
+import { User, MapPin, Building, ShieldCheck, Award, FileText, Upload, CheckCircle, Truck, Phone, Mail, Camera } from 'lucide-react';
 
 const IRISH_COUNTIES = [
   "Carlow", "Cavan", "Clare", "Cork", "Donegal", "Dublin", "Galway",
@@ -152,9 +152,9 @@ const Profile = () => {
               alt={profile?.name}
               className="w-20 h-20 rounded-full object-cover border-4 border-emerald-500 shadow-md bg-emerald-950"
             />
-            <label className="absolute bottom-0 right-0 bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-full cursor-pointer shadow-md">
-              <Upload className="w-3.5 h-3.5" />
-              <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+            <label className="absolute bottom-0 right-0 bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-full cursor-pointer shadow-md" title="Snap or Upload Profile Photo">
+              <Camera className="w-3.5 h-3.5" />
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
             </label>
           </div>
 

@@ -4,6 +4,7 @@ Quality Inspections & Certificates router for OrganicLink.
 
 import os
 import uuid
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -24,19 +25,63 @@ def analyze_image_quality(
     product_id: str = Form(None),
     product_type: str = Form("unknown"),
     inspection_level: str = Form("farm"), # farm, delivery
+    is_bulk: Optional[str] = Form("false"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     ext = os.path.splitext(image.filename)[1] or ".jpg"
     filename = f"insp_{uuid.uuid4().hex}{ext}"
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     filepath = os.path.join(UPLOADS_DIR, filename)
     with open(filepath, "wb") as f:
         f.write(image.file.read())
 
     image_url = f"/static/uploads/{filename}"
+    is_bulk_flag = str(is_bulk).lower() in ["true", "1", "yes"]
 
-    engine = get_inference_engine()
-    res = engine.analyze_image(filepath, expected_product=product_type)
+    if is_bulk_flag:
+        from cv.bulk_grading import grade_bulk
+        batch_res = grade_bulk(filepath, expected_product=product_type)
+        if batch_res.get("status") == "mismatch" or batch_res.get("product_mismatch"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=batch_res.get("message", f"Product Mismatch: This photo does not look like {product_type}.")
+            )
+        else:
+            score = batch_res.get("weighted_quality_score", 70.0)
+            grade = batch_res.get("batch_grade", "C")
+            bulk_summary = f"{batch_res.get('fresh_count', 0)} of {batch_res.get('matching_items_total', 1)} items fresh"
+            
+            # Copy annotated image so the preview displays the annotated image with bounding boxes
+            import shutil
+            ann_path = batch_res.get("annotated_image_path", "")
+            if ann_path and os.path.exists(ann_path):
+                annotated_filename = f"bulk_insp_{uuid.uuid4().hex}.jpg"
+                annotated_filepath = os.path.join(UPLOADS_DIR, annotated_filename)
+                shutil.copy(ann_path, annotated_filepath)
+                image_url = f"/static/uploads/{annotated_filename}"
+
+            res = {
+                "quality_score": score,
+                "quality_grade": grade,
+                "cv_breakdown": {
+                    "is_bulk": True,
+                    "batch_summary": bulk_summary,
+                    "total_items": batch_res.get('total_items_detected', 1),
+                    "matching_items": batch_res.get('matching_items_total', 1),
+                    "excluded_items": batch_res.get('excluded_items_count', 0),
+                    "fresh_count": batch_res.get('fresh_count', 0),
+                    "fresh_percent": batch_res.get('fresh_percent', 0.0),
+                    "defect_percent": batch_res.get('defect_percent', 0.0),
+                    "weighted_score": score,
+                    "ripeness_note": batch_res.get('ripeness_note'),
+                    "item_results": batch_res.get('item_results', []),
+                    "defective_items": batch_res.get('defective_items', [])
+                }
+            }
+    else:
+        engine = get_inference_engine()
+        res = engine.analyze_image(filepath, expected_product=product_type)
 
     inspection = QualityInspection(
         product_id=product_id,

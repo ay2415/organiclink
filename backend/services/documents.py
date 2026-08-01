@@ -16,6 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
 PDF_DIR = os.path.join(UPLOADS_DIR, "pdf")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(PDF_DIR, exist_ok=True)
 
 

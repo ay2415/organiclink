@@ -58,6 +58,11 @@ def create_farm(
     return farm
 
 
+@router.get("/my-farms")
+def get_my_farms(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Farm).filter(Farm.user_id == current_user.id).all()
+
+
 @router.get("/{farm_id}")
 def get_farm_profile(farm_id: str, db: Session = Depends(get_db)):
     farm = db.query(Farm).filter(Farm.id == farm_id).first()
@@ -131,6 +136,7 @@ def upload_certification(
 
     ext = os.path.splitext(file.filename)[1]
     filename = f"cert_{uuid.uuid4().hex}{ext}"
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     filepath = os.path.join(UPLOADS_DIR, filename)
     with open(filepath, "wb") as f:
         f.write(file.file.read())

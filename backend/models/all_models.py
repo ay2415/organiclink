@@ -175,6 +175,8 @@ class Product(Base):
     buyer_types_open_to = Column(JSON, default=list) # e.g. ["consumer", "retailer", "restaurant"]
     provides_transport = Column(Boolean, default=False)
     cv_grading_supported = Column(Boolean, default=False)
+    is_bulk = Column(Boolean, default=False)
+    bulk_summary = Column(String(255), nullable=True)
     image_url = Column(String(500), nullable=True)
     quality_grade = Column(String(5), nullable=True) # A, B, C, R
     quality_score = Column(Float, nullable=True)

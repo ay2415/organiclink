@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import GradeBadge from '../components/GradeBadge';
 import VarianceBadge from '../components/VarianceBadge';
 import CVBreakdownPanel from '../components/CVBreakdownPanel';
+import CameraOrUploadInput from '../components/CameraOrUploadInput';
 import {
   Upload, CheckCircle2, AlertTriangle, FileText, Star, Truck, ArrowRight, ShieldCheck
 } from 'lucide-react';
@@ -225,9 +226,12 @@ const OrderDetail = () => {
               </div>
             ) : isFarmer && (order.status === 'accepted' || order.status === 'pending') ? (
               <form onSubmit={handleUploadFarmPhoto} className="space-y-3 pt-2">
-                <input type="file" accept="image/*" onChange={e=>setFarmImageFile(e.target.files[0])} className="text-xs text-emerald-200" />
-                <button type="submit" disabled={uploading} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow">
-                  Upload Farm Photo & Run CV
+                <CameraOrUploadInput
+                  currentPreview={farmImageFile ? URL.createObjectURL(farmImageFile) : null}
+                  onFileSelected={(file) => setFarmImageFile(file)}
+                />
+                <button type="submit" disabled={uploading || !farmImageFile} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow disabled:opacity-50">
+                  Run Farm CV Quality Inspection
                 </button>
               </form>
             ) : (
@@ -258,7 +262,10 @@ const OrderDetail = () => {
               </div>
             ) : isBuyer && order.status === 'in_transit' ? (
               <form onSubmit={handleUploadDeliveryPhoto} className="space-y-3 pt-2">
-                <input type="file" accept="image/*" onChange={e=>setDelivImageFile(e.target.files[0])} className="text-xs text-emerald-200" required />
+                <CameraOrUploadInput
+                  currentPreview={delivImageFile ? URL.createObjectURL(delivImageFile) : null}
+                  onFileSelected={(file) => setDelivImageFile(file)}
+                />
                 
                 {/* Quality Drop Option Selection */}
                 <div className="bg-emerald-950/80 p-3 rounded-xl border border-emerald-700/60 space-y-2 text-xs">

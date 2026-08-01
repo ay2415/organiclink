@@ -1,9 +1,12 @@
 import os
 from pydantic_settings import BaseSettings
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_DB_PATH = os.path.join(BASE_DIR, "organiclink.db").replace("\\", "/")
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "OrganicLink"
-    DATABASE_URL: str = "sqlite:///./organiclink.db"
+    DATABASE_URL: str = f"sqlite:///{DEFAULT_DB_PATH}"
     SECRET_KEY: str = "organiclink-secret-key-change-in-production-2026-irish-organic"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440

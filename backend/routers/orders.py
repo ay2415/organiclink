@@ -293,6 +293,7 @@ def upload_farm_inspection_photo(
 
     ext = os.path.splitext(image.filename)[1] or ".jpg"
     filename = f"farm_insp_{uuid.uuid4().hex}{ext}"
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     filepath = os.path.join(UPLOADS_DIR, filename)
     with open(filepath, "wb") as f:
         f.write(image.file.read())
@@ -401,6 +402,7 @@ def upload_delivery_inspection_photo(
     # 1. Save delivery image
     ext = os.path.splitext(image.filename)[1] or ".jpg"
     filename = f"deliv_insp_{uuid.uuid4().hex}{ext}"
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     filepath = os.path.join(UPLOADS_DIR, filename)
     with open(filepath, "wb") as f:
         f.write(image.file.read())

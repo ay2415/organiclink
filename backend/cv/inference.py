@@ -1,5 +1,6 @@
 """
-Inference Engine for OrganicLink produce quality + product verification.
+# CV Inference Engine for OrganicLink Produce Quality & Product Classification
+# Restored proven high-accuracy quality model weights..
 
 =====================================================================
   MODEL TOGGLE - change ONE line to switch models:
@@ -51,8 +52,8 @@ if MODEL_CHOICE == "quality_model":
     MODEL_VERSION = "resnet18-multihead-v3-15class"
 else:
     MODEL_PATH = os.path.join(BASE_DIR, "models", "grading_model.pt")
-    PRODUCT_CLASSES = PRODUCT_CLASSES_16
-    MODEL_VERSION = "resnet18-multihead-v6-16class"
+    PRODUCT_CLASSES = PRODUCT_CLASSES_15
+    MODEL_VERSION = "resnet18-multihead-v6-15class"
 
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
@@ -145,13 +146,28 @@ class GradingInferenceEngine:
     def load_model(self):
         if not os.path.exists(MODEL_PATH):
             print(f"[CV] No model at {MODEL_PATH}. Grading DISABLED.")
-            self.model = None
-            self.model_available = False
+            if not getattr(self, 'model', None):
+                self.model = None
+                self.model_available = False
             return
 
-        n_prod = len(PRODUCT_CLASSES)
+        try:
+            state = torch.load(MODEL_PATH, map_location=self.device)
+        except Exception as e:
+            print(f"[CV] Warning: Failed to read checkpoint {MODEL_PATH} ({e}). Retaining active model.")
+            return
+
+        if "product_head.weight" in state:
+            n_prod = state["product_head.weight"].shape[0]
+        else:
+            n_prod = len(PRODUCT_CLASSES)
+
+        if n_prod == 15:
+            self.product_classes = PRODUCT_CLASSES_15
+        else:
+            self.product_classes = PRODUCT_CLASSES_16
+
         n_def = len(DEFECT_CLASSES)
-        state = torch.load(MODEL_PATH, map_location=self.device)
 
         # Try both head layouts - whichever matches the saved weights loads.
         for ModelClass in (MultiHeadProduceModelDropout, MultiHeadProduceModel):
@@ -166,16 +182,24 @@ class GradingInferenceEngine:
                 print(f"[CV] Loaded {MODEL_VERSION} from {os.path.basename(MODEL_PATH)} "
                       f"({n_prod} products) using {ModelClass.__name__}.")
                 return
-            except Exception:
+            except Exception as e:
                 continue
 
-        print(f"[CV] FAILED to load {MODEL_PATH} with either head layout. "
-              f"Check that PRODUCT_CLASSES count matches the trained model. "
-              f"Grading DISABLED.")
-        self.model = None
-        self.model_available = False
+        if not getattr(self, 'model', None):
+            print(f"[CV] FAILED to load {MODEL_PATH} with either head layout. "
+                  f"Check that PRODUCT_CLASSES count matches the trained model. "
+                  f"Grading DISABLED.")
+            self.model = None
+            self.model_available = False
 
     def extract_opencv_metrics(self, image_path):
+        # Auto-reload model weights if step2_train.py saved a newer checkpoint on disk
+        if os.path.exists(MODEL_PATH):
+            current_mtime = os.path.getmtime(MODEL_PATH)
+            if current_mtime > self.last_mtime:
+                print(f"[CV] Auto-reloading newer model checkpoint from {os.path.basename(MODEL_PATH)}...")
+                self.load_model()
+
         img_bgr = cv2.imread(image_path)
         if img_bgr is None:
             return {"colour_vibrancy": 0.0, "colour_uniformity": 0.0,
@@ -213,11 +237,13 @@ class GradingInferenceEngine:
                     "quality_grade": None, "quality_score": None,
                     "message": CV_UNSUPPORTED_PRODUCTS[expected]}
 
-        if expected != "unknown" and expected not in PRODUCT_CLASSES:
+        product_classes = getattr(self, 'product_classes', PRODUCT_CLASSES)
+
+        if expected != "unknown" and expected not in product_classes:
             return {"status": "not_gradable", "product_mismatch": False,
                     "quality_grade": None, "quality_score": None,
                     "message": (f"'{expected_product}' is not supported. "
-                                f"Supported: {', '.join(PRODUCT_CLASSES)}.")}
+                                f"Supported: {', '.join(product_classes)}.")}
 
         if not self.model_available:
             return {"status": "unavailable", "product_mismatch": False,
@@ -234,7 +260,7 @@ class GradingInferenceEngine:
             def_probs = torch.softmax(def_logits, dim=1).squeeze(0)
 
         top_idx = int(torch.argmax(prod_probs).item())
-        predicted_product = PRODUCT_CLASSES[top_idx]
+        predicted_product = product_classes[top_idx]
         predicted_conf = float(prod_probs[top_idx].item() * 100.0)
 
         if predicted_conf < MIN_CONFIDENCE_TO_ACCEPT:
@@ -245,26 +271,21 @@ class GradingInferenceEngine:
                                 f"light, produce filling the frame, plain background.")}
 
         if expected != "unknown":
-            expected_idx = PRODUCT_CLASSES.index(expected)
+            expected_idx = product_classes.index(expected)
             expected_conf = float(prod_probs[expected_idx].item() * 100.0)
             synonyms = PRODUCT_SYNONYMS.get(expected, [expected])
             is_synonym = any(predicted_product == s.lower().replace(" ", "_") for s in synonyms)
 
-            # Top-3 tolerance for bulk market produce piles (e.g. piles of red tomatoes)
-            top3_indices = torch.topk(prod_probs, k=min(3, len(PRODUCT_CLASSES))).indices.tolist()
-            top3_classes = [PRODUCT_CLASSES[i] for i in top3_indices]
-            is_top3_match = (expected in top3_classes or any(s in top3_classes for s in synonyms)) and (expected_conf >= 15.0)
-
-            if (predicted_product != expected and not is_synonym and not is_top3_match
-                    and (predicted_conf - expected_conf) > 30.0):
+            # Product Mismatch Check: Reject if classifier is highly confident (>=70%) of a different product
+            # and margin over the expected product is at least 30% (prevents false rejections on similar looking fruits).
+            if (predicted_product != expected and not is_synonym and predicted_conf >= 70.0 and (predicted_conf - expected_conf) >= 30.0):
                 return {"status": "product_mismatch", "product_mismatch": True,
                         "quality_grade": "R", "quality_score": 0.0,
                         "predicted_label": predicted_product,
                         "neural_confidence": round(predicted_conf, 2),
-                        "message": (f"This looks like {predicted_product.replace('_',' ')} "
+                        "message": (f"Product Mismatch Detected: This photo looks like {predicted_product.replace('_',' ').title()} "
                                     f"({predicted_conf:.0f}% confidence), but you selected "
-                                    f"{expected_product}. Please upload a photo of your "
-                                    f"{expected_product}.")}
+                                    f"{expected_product.title()}. Please upload a photo of {expected_product.title()}.")}
 
         prob_fresh, prob_minor, prob_major = calibrate_probabilities(
             float(def_probs[0].item()),
