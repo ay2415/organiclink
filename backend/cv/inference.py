@@ -52,8 +52,8 @@ if MODEL_CHOICE == "quality_model":
     MODEL_VERSION = "resnet18-multihead-v3-15class"
 else:
     MODEL_PATH = os.path.join(BASE_DIR, "models", "grading_model.pt")
-    PRODUCT_CLASSES = PRODUCT_CLASSES_15
-    MODEL_VERSION = "resnet18-multihead-v6-15class"
+    PRODUCT_CLASSES = PRODUCT_CLASSES_16
+    MODEL_VERSION = "resnet18-multihead-v6-16class"
 
 DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
 
@@ -159,13 +159,17 @@ class GradingInferenceEngine:
 
         if "product_head.weight" in state:
             n_prod = state["product_head.weight"].shape[0]
+        elif "product_head.1.weight" in state:
+            n_prod = state["product_head.1.weight"].shape[0]
         else:
-            n_prod = len(PRODUCT_CLASSES)
+            raise RuntimeError("Cannot find product head weight in checkpoint")
 
         if n_prod == 15:
             self.product_classes = PRODUCT_CLASSES_15
-        else:
+        elif n_prod == 16:
             self.product_classes = PRODUCT_CLASSES_16
+        else:
+            raise RuntimeError(f"Unexpected product head size: {n_prod}")
 
         n_def = len(DEFECT_CLASSES)
 
@@ -276,9 +280,8 @@ class GradingInferenceEngine:
             synonyms = PRODUCT_SYNONYMS.get(expected, [expected])
             is_synonym = any(predicted_product == s.lower().replace(" ", "_") for s in synonyms)
 
-            # Product Mismatch Check: Reject if classifier is highly confident (>=70%) of a different product
-            # and margin over the expected product is at least 30% (prevents false rejections on similar looking fruits).
-            if (predicted_product != expected and not is_synonym and predicted_conf >= 70.0 and (predicted_conf - expected_conf) >= 30.0):
+            # Strict Product Mismatch Check: If predicted product is different and confidence > 35%
+            if (predicted_product != expected and not is_synonym and predicted_conf >= 35.0):
                 return {"status": "product_mismatch", "product_mismatch": True,
                         "quality_grade": "R", "quality_score": 0.0,
                         "predicted_label": predicted_product,

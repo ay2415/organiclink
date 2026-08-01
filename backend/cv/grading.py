@@ -24,6 +24,11 @@ SCORE_FRESH = 100.0
 SCORE_MINOR = 55.0
 SCORE_MAJOR = 8.0
 
+# Configurable Grade Thresholds based on Fresh Probability (1 - Defect Probability)
+THRESHOLD_GRADE_A = 0.85
+THRESHOLD_GRADE_B = 0.70
+THRESHOLD_GRADE_C = 0.50
+
 
 def calibrate_probabilities(
     prob_fresh: float,
@@ -53,15 +58,20 @@ def compute_quality_score(
     defect_coverage_percent: float = 0.0,
 ) -> float:
     """
-    Overall quality score (0-100), driven by the trained multi-head ResNet-18 classifier (80%)
-    and OpenCV colour metrics (20%).
+    Overall quality score (0-100), driven by the combined defect signal
+    (defect_probability = P(minor_defect) + P(major_defect) = 1 - P(fresh))
+    blended 80% neural classifier + 20% OpenCV colour metrics.
     """
     pf, pm, pj = calibrate_probabilities(
         prob_fresh, prob_minor, prob_major, colour_uniformity, defect_coverage_percent
     )
 
+    defect_probability = pm + pj
+    fresh_probability = pf
+
+    # 80% Neural component driven by fresh vs combined defect signal
     class_component = (
-        SCORE_FRESH * pf
+        SCORE_FRESH * fresh_probability
         + SCORE_MINOR * pm
         + SCORE_MAJOR * pj
     )
@@ -72,13 +82,26 @@ def compute_quality_score(
     return round(max(0.0, min(100.0, quality_score)), 2)
 
 
-def score_to_grade(quality_score: float) -> str:
+def score_to_grade(quality_score: float, prob_fresh: float = None) -> str:
     """
-    >= 85 : A (Premium)
-    70-84 : B (Good)
-    50-69 : C (Fair)
-    < 50  : R (Reject)
+    Letter grade mapping:
+    If prob_fresh is provided:
+      >= 0.85 : A (Premium)
+      0.70 - 0.84 : B (Good)
+      0.50 - 0.69 : C (Fair)
+      < 0.50 : R (Reject)
+    Fallback on quality_score (0-100 scale):
+      >= 85.0 : A, >= 70.0 : B, >= 50.0 : C, < 50.0 : R
     """
+    if prob_fresh is not None:
+        if prob_fresh >= THRESHOLD_GRADE_A:
+            return "A"
+        if prob_fresh >= THRESHOLD_GRADE_B:
+            return "B"
+        if prob_fresh >= THRESHOLD_GRADE_C:
+            return "C"
+        return "R"
+
     if quality_score >= 85.0:
         return "A"
     if quality_score >= 70.0:
