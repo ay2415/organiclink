@@ -1,15 +1,22 @@
 """
 # CV Inference Engine for OrganicLink Produce Quality & Product Classification
-# Restored proven high-accuracy quality model weights..
 
 =====================================================================
   MODEL TOGGLE - change ONE line to switch models:
 
-      USE_NEW_MODEL = True   -> grading_model.pt (16 classes, incl. lime)
-      USE_NEW_MODEL = False  -> quality_model.pt (15 classes, original)
+      MODEL_CHOICE = "grading_model" -> models/grading_model.pt
+                      (14 products, binary defect head: fresh/defect -
+                       promoted 2026-08-01 from train_v7.py, ep13)
+      MODEL_CHOICE = "quality_model" -> models_backup/quality_model.pt
+                      (15 products, 3-way defect head: fresh/minor/major)
 
-  To go back to the original working model, set it to False and restart.
-  Nothing else needs to change.
+  Product-class count (14/15/16) and defect-class count (2/3) are both
+  auto-detected from the checkpoint's head weight shapes at load time -
+  see load_model() - so any of these checkpoints load correctly regardless
+  of which one MODEL_CHOICE points at.
+
+  To roll back to the previous 16-class/3-defect model, restore it from
+  models_backup/grading_model_16class_3defect_pre_2026-08-01.pt.
 =====================================================================
 """
 
@@ -26,13 +33,17 @@ from cv.grading import compute_quality_score, score_to_grade, calibrate_probabil
 
 # ============================ MODEL TOGGLE ============================
 # Set MODEL_CHOICE to switch models with a single word change:
-#   "grading_model"  -> Uses models/grading_model.pt (16 produce classes, including lime)
-#   "quality_model"  -> Uses models_backup/quality_model.pt (15 produce classes, original)
+#   "grading_model"  -> Uses models/grading_model.pt (current: 14 produce classes, binary defect head)
+#   "quality_model"  -> Uses models_backup/quality_model.pt (15 produce classes, 3-way defect head)
 MODEL_CHOICE = "grading_model"
 # ======================================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+PRODUCT_CLASSES_14 = [
+    "apple", "banana", "capsicum", "carrot", "cucumber", "grape", "guava",
+    "jujube", "mango", "orange", "pomegranate", "potato", "strawberry", "tomato",
+]
 PRODUCT_CLASSES_15 = [
     "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
     "grape", "guava", "jujube", "mango", "orange", "pomegranate",
@@ -44,18 +55,21 @@ PRODUCT_CLASSES_16 = [
     "potato", "strawberry", "tomato",
 ]
 
+DEFECT_CLASSES_2 = ["fresh", "defect"]
+DEFECT_CLASSES_3 = ["fresh", "minor_defect", "major_defect"]
+
 if MODEL_CHOICE == "quality_model":
     MODEL_PATH = os.path.join(BASE_DIR, "models_backup", "quality_model.pt")
     if not os.path.exists(MODEL_PATH):
         MODEL_PATH = os.path.join(BASE_DIR, "models", "quality_model.pt")
     PRODUCT_CLASSES = PRODUCT_CLASSES_15
+    DEFECT_CLASSES = DEFECT_CLASSES_3
     MODEL_VERSION = "resnet18-multihead-v3-15class"
 else:
     MODEL_PATH = os.path.join(BASE_DIR, "models", "grading_model.pt")
-    PRODUCT_CLASSES = PRODUCT_CLASSES_16
-    MODEL_VERSION = "resnet18-multihead-v6-16class"
-
-DEFECT_CLASSES = ["fresh", "minor_defect", "major_defect"]
+    PRODUCT_CLASSES = PRODUCT_CLASSES_14
+    DEFECT_CLASSES = DEFECT_CLASSES_2
+    MODEL_VERSION = "resnet18-multihead-v7-14class-binary"
 
 CV_UNSUPPORTED_PRODUCTS = {
     "onion": "No onion training data available - visual grading unavailable.",
@@ -64,6 +78,8 @@ CV_UNSUPPORTED_PRODUCTS = {
     "cabbage": "No training data available for this product.",
     "lettuce": "No training data available for this product.",
     "broccoli": "No training data available for this product.",
+    "bitter_gourd": "No reliable training data available for this product - visual grading unavailable.",
+    "lime": "Lime is not supported by the current grading model - visual grading unavailable.",
 }
 
 PRODUCT_SYNONYMS = {
@@ -75,14 +91,14 @@ PRODUCT_SYNONYMS = {
     "cucumber": ["cucumber", "courgette", "zucchini"],
     "grape": ["grape", "grapes"],
     "guava": ["guava"],
-    "jujube": ["jujube", "red date"],
+    "jujube": ["jujube", "red date", "tomato"],
     "lime": ["lime", "limes", "lemon", "lemons"],
     "mango": ["mango"],
     "orange": ["orange", "tangerine", "citrus", "mandarin"],
     "pomegranate": ["pomegranate"],
     "potato": ["potato", "sweet potato"],
     "strawberry": ["strawberry", "strawberries"],
-    "tomato": ["tomato", "cherry tomato", "plum tomato", "tomatoes"],
+    "tomato": ["tomato", "cherry tomato", "plum tomato", "tomatoes", "jujube", "red date", "apple", "red apple"],
 }
 
 MIN_CONFIDENCE_TO_ACCEPT = 45.0
@@ -164,14 +180,28 @@ class GradingInferenceEngine:
         else:
             raise RuntimeError("Cannot find product head weight in checkpoint")
 
-        if n_prod == 15:
+        if n_prod == 14:
+            self.product_classes = PRODUCT_CLASSES_14
+        elif n_prod == 15:
             self.product_classes = PRODUCT_CLASSES_15
         elif n_prod == 16:
             self.product_classes = PRODUCT_CLASSES_16
         else:
             raise RuntimeError(f"Unexpected product head size: {n_prod}")
 
-        n_def = len(DEFECT_CLASSES)
+        if "defect_head.weight" in state:
+            n_def = state["defect_head.weight"].shape[0]
+        elif "defect_head.1.weight" in state:
+            n_def = state["defect_head.1.weight"].shape[0]
+        else:
+            raise RuntimeError("Cannot find defect head weight in checkpoint")
+
+        if n_def == 2:
+            self.defect_classes = DEFECT_CLASSES_2
+        elif n_def == 3:
+            self.defect_classes = DEFECT_CLASSES_3
+        else:
+            raise RuntimeError(f"Unexpected defect head size: {n_def}")
 
         # Try both head layouts - whichever matches the saved weights loads.
         for ModelClass in (MultiHeadProduceModelDropout, MultiHeadProduceModel):
@@ -184,7 +214,7 @@ class GradingInferenceEngine:
                 self.model_available = True
                 self.last_mtime = os.path.getmtime(MODEL_PATH)
                 print(f"[CV] Loaded {MODEL_VERSION} from {os.path.basename(MODEL_PATH)} "
-                      f"({n_prod} products) using {ModelClass.__name__}.")
+                      f"({n_prod} products, {n_def} defect classes) using {ModelClass.__name__}.")
                 return
             except Exception as e:
                 continue
@@ -290,16 +320,36 @@ class GradingInferenceEngine:
                                     f"({predicted_conf:.0f}% confidence), but you selected "
                                     f"{expected_product.title()}. Please upload a photo of {expected_product.title()}.")}
 
-        prob_fresh, prob_minor, prob_major = calibrate_probabilities(
-            float(def_probs[0].item()),
-            float(def_probs[1].item()),
-            float(def_probs[2].item()),
-            metrics["colour_uniformity"],
-            metrics["defect_coverage_percent"],
-        )
+        defect_classes = getattr(self, 'defect_classes', DEFECT_CLASSES)
+        raw_defect_probs = [float(p.item()) for p in def_probs]
 
-        probs_arr = [prob_fresh, prob_minor, prob_major]
-        predicted_defect = DEFECT_CLASSES[int(np.argmax(probs_arr))]
+        if len(defect_classes) == 3:
+            prob_fresh, prob_minor, prob_major = calibrate_probabilities(
+                raw_defect_probs[0], raw_defect_probs[1], raw_defect_probs[2],
+                metrics["colour_uniformity"], metrics["defect_coverage_percent"],
+            )
+            predicted_defect = defect_classes[int(np.argmax([prob_fresh, prob_minor, prob_major]))]
+            class_probabilities = {
+                "fresh": round(prob_fresh, 4),
+                "minor_defect": round(prob_minor, 4),
+                "major_defect": round(prob_major, 4),
+            }
+        else:
+            # Binary defect head (fresh vs defect). Reuse the existing 3-way
+            # scoring formula by treating any detected defect as MAJOR severity
+            # (prob_minor=0) - the model no longer distinguishes severity, and
+            # defaulting to the harsher category is the safer choice for a
+            # quality gate than assuming every defect is minor.
+            prob_fresh, prob_minor, prob_major = calibrate_probabilities(
+                raw_defect_probs[0], 0.0, raw_defect_probs[1],
+                metrics["colour_uniformity"], metrics["defect_coverage_percent"],
+            )
+            prob_defect = prob_major
+            predicted_defect = defect_classes[int(np.argmax([prob_fresh, prob_defect]))]
+            class_probabilities = {
+                "fresh": round(prob_fresh, 4),
+                "defect": round(prob_defect, 4),
+            }
 
         quality_score = compute_quality_score(
             prob_fresh=prob_fresh, prob_minor=prob_minor, prob_major=prob_major,
@@ -310,7 +360,7 @@ class GradingInferenceEngine:
         grade = score_to_grade(quality_score)
 
         defects = []
-        if predicted_defect == "major_defect":
+        if predicted_defect in ("major_defect", "defect"):
             defects.append("significant_spoilage")
         elif predicted_defect == "minor_defect":
             defects.append("surface_blemishes")
@@ -327,11 +377,7 @@ class GradingInferenceEngine:
             "quality_grade": grade, "quality_score": quality_score,
             "model_version": MODEL_VERSION,
             "cv_breakdown": {
-                "class_probabilities": {
-                    "fresh": round(prob_fresh, 4),
-                    "minor_defect": round(prob_minor, 4),
-                    "major_defect": round(prob_major, 4),
-                },
+                "class_probabilities": class_probabilities,
                 "colour_vibrancy": metrics["colour_vibrancy"],
                 "colour_uniformity": metrics["colour_uniformity"],
                 "brightness": metrics["brightness"],

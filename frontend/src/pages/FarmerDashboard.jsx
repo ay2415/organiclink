@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import GradeBadge from '../components/GradeBadge';
 import {
   TrendingUp, Award, AlertCircle, PlusCircle, PackageCheck,
-  FileText, ShieldCheck, MapPin, ArrowRight
+  FileText, ShieldCheck, MapPin, ArrowRight, Trash2
 } from 'lucide-react';
 
 const FarmerDashboard = () => {
@@ -61,6 +61,16 @@ const FarmerDashboard = () => {
       fetchDashboardData();
     } catch (err) {
       alert('Error updating price');
+    }
+  };
+
+  const handleDeleteListing = async (prodId) => {
+    if (!window.confirm('Are you sure you want to delete this listing? This cannot be undone.')) return;
+    try {
+      await api.delete(`/api/products/${prodId}`);
+      fetchDashboardData();
+    } catch (err) {
+      alert('Error deleting listing');
     }
   };
 
@@ -244,25 +254,34 @@ const FarmerDashboard = () => {
                 </div>
                 
                 {/* Inline Price Editor */}
-                <div className="flex justify-end border-t pt-2 mt-1">
+                <div className="flex justify-end items-center gap-2 border-t pt-2 mt-1">
                   {editingPriceId === prod.id ? (
                     <div className="flex items-center gap-2">
-                      <input 
-                        type="number" step="0.05" 
-                        value={editPriceValue} 
-                        onChange={e => setEditPriceValue(e.target.value)} 
+                      <input
+                        type="number" step="0.05"
+                        value={editPriceValue}
+                        onChange={e => setEditPriceValue(e.target.value)}
                         className="border rounded px-2 py-1 text-xs w-20"
                       />
                       <button onClick={() => handleUpdatePrice(prod.id)} className="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">Save</button>
                       <button onClick={() => setEditingPriceId(null)} className="text-gray-500 text-xs hover:underline">Cancel</button>
                     </div>
                   ) : (
-                    <button 
-                      onClick={() => { setEditingPriceId(prod.id); setEditPriceValue(prod.price_per_unit); }} 
-                      className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded"
-                    >
-                      Edit Price
-                    </button>
+                    <>
+                      <button
+                        onClick={() => { setEditingPriceId(prod.id); setEditPriceValue(prod.price_per_unit); }}
+                        className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded"
+                      >
+                        Edit Price
+                      </button>
+                      <button
+                        onClick={() => handleDeleteListing(prod.id)}
+                        className="text-gray-400 hover:text-red-600 p-1"
+                        title="Delete listing"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

@@ -63,7 +63,7 @@ def grade_bulk(
     h, w, _ = img.shape
     engine = get_inference_engine()
 
-    raw_detections = detect_items(image_path, conf_threshold=0.35)
+    raw_detections = detect_items(image_path, conf_threshold=det_conf_threshold)
     all_detections = filter_overlapping_boxes(raw_detections, iou_threshold=0.5)
 
     synonyms = PRODUCT_SYNONYMS.get(expected_product.lower(), [expected_product.lower()])
@@ -160,12 +160,30 @@ def grade_bulk(
     total_detected = len(all_detections)
     matching_total = len(matching_crops)
 
-    if matching_total == 0 or (matching_total / float(total_detected) <= 0.50 and total_detected > 1):
-        main_excluded = excluded_crops[0]["pred_product"] if excluded_crops else "unknown"
+    # Only crops the classifier confidently identified as a DIFFERENT product
+    # count as evidence this is the wrong produce. Crops merely excluded as
+    # unclear/not_gradable/missing-score are inconclusive noise (small or
+    # awkwardly-cropped bulk-photo items the classifier just couldn't read) -
+    # they must not count against the match ratio, or a genuinely correct
+    # batch gets rejected as "mismatch" purely because crop quality was poor.
+    confident_wrong_crops = [c for c in excluded_crops if c["exclude_reason"] == "product_mismatch"]
+    inconclusive_crops = [c for c in excluded_crops if c["exclude_reason"] != "product_mismatch"]
+    confident_total = matching_total + len(confident_wrong_crops)
+
+    if matching_total == 0 or (confident_total > 1 and matching_total / float(confident_total) <= 0.50):
+        if confident_wrong_crops:
+            counts = Counter(c["pred_product"] for c in confident_wrong_crops if c["pred_product"])
+            main_excluded = counts.most_common(1)[0][0] if counts else "unknown"
+            message = f"Product Mismatch: Photo contains mostly {main_excluded.title()}, not {expected_product.title()}."
+        else:
+            main_excluded = "unclear"
+            message = (f"Could not confidently identify {expected_product.title()} in this photo "
+                        f"({len(inconclusive_crops)} of {total_detected} detected items were too unclear to grade). "
+                        f"Retake in good light with items more clearly separated and visible.")
         return {
             "status": "mismatch",
             "product_mismatch": True,
-            "message": f"Product Mismatch: Photo contains mostly {main_excluded.title()}, not {expected_product.title()}.",
+            "message": message,
             "expected": expected_product,
             "found": main_excluded
         }

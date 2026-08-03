@@ -77,6 +77,11 @@ def create_product_listing(
     cv_result = None
     bulk_summary = None
     defects = []
+    # Evidence photo for the QualityInspection record. Defaults to the original
+    # clean upload; only overridden for bulk grading, which has its own annotated
+    # (bounding-box) evidence image - that image must NEVER become the listing's
+    # public image_url (the product card photo).
+    inspection_image_url = image_url
 
     if is_cv_gradable:
         if is_bulk:
@@ -113,14 +118,15 @@ def create_product_listing(
                 "quality_grade": grade,
             }
 
-            # Copy annotated image as the listing photo so it displays like any listing photo
+            # Copy the annotated (bounding-box) image as inspection EVIDENCE only.
+            # image_url (the listing/product card photo) stays the original clean upload.
             import shutil
             ann_path = batch_res.get("annotated_image_path", "")
             if ann_path and os.path.exists(ann_path):
                 annotated_filename = f"bulk_ann_{uuid.uuid4().hex}.jpg"
                 annotated_filepath = os.path.join(UPLOADS_DIR, annotated_filename)
                 shutil.copy(ann_path, annotated_filepath)
-                image_url = f"/static/uploads/{annotated_filename}"
+                inspection_image_url = f"/static/uploads/{annotated_filename}"
 
         else:
             # Single-Item Grading Mode (Preserved untouched)
@@ -159,7 +165,7 @@ def create_product_listing(
     if is_cv_gradable and cv_result and score is not None:
         inspection = QualityInspection(
             inspection_level="farm",
-            image_url=image_url,
+            image_url=inspection_image_url,
             cv_results=cv_result.get("cv_breakdown", {}),
             quality_score=score,
             quality_grade=grade,

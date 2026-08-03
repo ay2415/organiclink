@@ -39,7 +39,11 @@ const CVBreakdownPanel = ({ inspection, title = "Computer Vision Quality Inspect
         </div>
       </div>
 
-      {probs.fresh !== undefined && (
+      {/* class_probabilities shape depends on which model graded this inspection:
+          older inspections (pre 2026-08-01) have a 3-way fresh/minor_defect/major_defect
+          split; current inspections have a binary fresh/defect split. Render whichever
+          the stored record actually has, rather than assuming one shape. */}
+      {probs.fresh !== undefined && probs.minor_defect !== undefined && (
         <div>
           <span className="text-xs font-semibold text-gray-600 block mb-1.5">Classifier Confidence Probabilities:</span>
           <div className="space-y-1 text-xs">
@@ -65,6 +69,29 @@ const CVBreakdownPanel = ({ inspection, title = "Computer Vision Quality Inspect
             </div>
             <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
               <div className="bg-red-500 h-full" style={{ width: `${probs.major_defect * 100}%` }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {probs.fresh !== undefined && probs.defect !== undefined && (
+        <div>
+          <span className="text-xs font-semibold text-gray-600 block mb-1.5">Classifier Confidence Probabilities:</span>
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between text-gray-600">
+              <span>Fresh Produce:</span>
+              <span className="font-semibold">{(probs.fresh * 100).toFixed(1)}%</span>
+            </div>
+            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-emerald-500 h-full" style={{ width: `${probs.fresh * 100}%` }}></div>
+            </div>
+
+            <div className="flex justify-between text-gray-600 pt-1">
+              <span>Defect:</span>
+              <span className="font-semibold">{(probs.defect * 100).toFixed(1)}%</span>
+            </div>
+            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-red-500 h-full" style={{ width: `${probs.defect * 100}%` }}></div>
             </div>
           </div>
         </div>

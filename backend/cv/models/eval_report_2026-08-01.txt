@@ -1,0 +1,119 @@
+ORGANICLINK EVALUATION REPORT (train_v7.py)
+============================================================
+Run date: 2026-08-01
+Dataset scanned: C:\Users\aashrith sai\OneDrive - mlrinstitutions.ac.in\Documents\safe folder fr projdect\organiclink\backend\cv\data\Fruit And Vegetable Diseases Dataset
+Images (usable): 29291   skipped: 0
+Train: 21090   Val: 5272   Test (held out): 2929
+Best epoch: 13 (phase=finetune)   Time: 1590.3 min
+Checkpoint saved to: C:\Users\aashrith sai\OneDrive - mlrinstitutions.ac.in\Documents\safe folder fr projdect\organiclink\backend\cv\models\grading_model_2026-08-01_ep13.pt
+NOTE: C:\Users\aashrith sai\OneDrive - mlrinstitutions.ac.in\Documents\safe folder fr projdect\organiclink\backend\cv\models\grading_model.pt was NOT modified by this run.
+
+============================================================
+VALIDATION METRICS (used for checkpoint selection - optimistic bias expected)
+============================================================
+------------------------------------------------------------
+PRODUCT CLASSIFICATION (VAL)
+------------------------------------------------------------
+Accuracy: 97.38%   Macro F1: 0.9578
+
+class             precision   recall      f1  support
+apple                0.9969   0.9686  0.9825      988
+banana               0.9954   0.9954  0.9954      871
+capsicum             0.8333   0.9500  0.8879      200
+carrot               0.9696   0.9449  0.9571      236
+cucumber             0.9571   0.9710  0.9640      207
+grape                1.0000   1.0000  1.0000       57
+guava                0.8750   1.0000  0.9333       56
+jujube               0.7768   1.0000  0.8744       87
+mango                0.9957   0.9614  0.9783      726
+orange               0.9960   0.9742  0.9850      774
+pomegranate          0.9577   1.0000  0.9784       68
+potato               0.8790   0.9520  0.9140      229
+strawberry           1.0000   0.9912  0.9956      565
+tomato               0.9754   0.9519  0.9635      208
+
+Confusion matrix (rows = true, cols = predicted):
+                apple  banana  capsic  carrot  cucumb   grape   guava  jujube   mango  orange  pomegr  potato  strawb  tomato
+apple             957       1       8       0       1       0       0       6       0       1       0      10       0       4
+banana              0     867       2       0       0       0       0       0       1       0       0       1       0       0
+capsicum            0       0     190       6       1       0       0       0       0       0       0       2       0       1
+carrot              0       1       6     223       1       0       0       0       0       0       0       5       0       0
+cucumber            0       2       1       0     201       0       0       0       0       0       0       3       0       0
+grape               0       0       0       0       0      57       0       0       0       0       0       0       0       0
+guava               0       0       0       0       0       0      56       0       0       0       0       0       0       0
+jujube              0       0       0       0       0       0       0      87       0       0       0       0       0       0
+mango               1       0       2       1       3       0       8       2     698       2       1       8       0       0
+orange              1       0       3       0       1       0       0      13       1     754       0       1       0       0
+pomegranate         0       0       0       0       0       0       0       0       0       0      68       0       0       0
+potato              1       0       3       0       2       0       0       3       1       0       1     218       0       0
+strawberry          0       0       5       0       0       0       0       0       0       0       0       0     560       0
+tomato              0       0       8       0       0       0       0       1       0       0       1       0       0     198
+
+------------------------------------------------------------
+QUALITY GRADING (VAL)
+------------------------------------------------------------
+Accuracy: 98.18%   Macro F1: 0.9818
+
+class             precision   recall      f1  support
+fresh                0.9717   0.9904  0.9809     2495
+defect               0.9912   0.9741  0.9826     2777
+
+Confusion matrix (rows = true, cols = predicted):
+           fresh  defect
+fresh       2471      24
+defect        72    2705
+
+============================================================
+HELD-OUT TEST METRICS (never used in training or checkpoint selection)
+============================================================
+------------------------------------------------------------
+PRODUCT CLASSIFICATION (TEST)
+------------------------------------------------------------
+Accuracy: 96.79%   Macro F1: 0.9553
+
+class             precision   recall      f1  support
+apple                0.9980   0.9705  0.9841      509
+banana               0.9979   0.9853  0.9916      477
+capsicum             0.8035   0.9858  0.8854      141
+carrot               0.9810   0.9115  0.9450      113
+cucumber             0.9362   0.9778  0.9565      135
+grape                0.9524   1.0000  0.9756       40
+guava                0.9318   1.0000  0.9647       41
+jujube               0.8269   1.0000  0.9053       43
+mango                0.9924   0.9489  0.9701      411
+orange               0.9926   0.9643  0.9783      420
+pomegranate          0.9744   1.0000  0.9870       38
+potato               0.8456   0.9350  0.8880      123
+strawberry           0.9967   0.9839  0.9903      310
+tomato               0.9677   0.9375  0.9524      128
+
+Confusion matrix (rows = true, cols = predicted):
+                apple  banana  capsic  carrot  cucumb   grape   guava  jujube   mango  orange  pomegr  potato  strawb  tomato
+apple             494       0       5       0       0       0       0       3       0       1       1       5       0       0
+banana              0     470       1       0       2       0       0       1       2       0       0       0       1       0
+capsicum            0       0     139       0       1       0       0       0       0       0       0       0       0       1
+carrot              0       0       5     103       3       0       0       0       0       0       0       2       0       0
+cucumber            0       0       2       0     132       0       0       0       0       0       0       1       0       0
+grape               0       0       0       0       0      40       0       0       0       0       0       0       0       0
+guava               0       0       0       0       0       0      41       0       0       0       0       0       0       0
+jujube              0       0       0       0       0       0       0      43       0       0       0       0       0       0
+mango               0       1       2       1       2       0       3       0     390       1       0      10       0       1
+orange              1       0       2       0       0       2       0       5       0     405       0       3       0       2
+pomegranate         0       0       0       0       0       0       0       0       0       0      38       0       0       0
+potato              0       0       5       1       0       0       0       0       1       1       0     115       0       0
+strawberry          0       0       4       0       1       0       0       0       0       0       0       0     305       0
+tomato              0       0       8       0       0       0       0       0       0       0       0       0       0     120
+
+------------------------------------------------------------
+QUALITY GRADING (TEST)
+------------------------------------------------------------
+Accuracy: 98.29%   Macro F1: 0.9828
+
+class             precision   recall      f1  support
+fresh                0.9744   0.9888  0.9815     1345
+defect               0.9904   0.9779  0.9841     1584
+
+Confusion matrix (rows = true, cols = predicted):
+           fresh  defect
+fresh       1330      15
+defect        35    1549

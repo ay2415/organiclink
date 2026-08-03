@@ -316,7 +316,27 @@ def upload_farm_inspection_photo(
 
     if is_cv_gradable:
         engine = get_inference_engine()
-        res = engine.analyze_image(filepath)
+        res = engine.analyze_image(filepath, expected_product=product.product_type)
+
+        if res.get("product_mismatch"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=res.get("message", "Product mismatch detected.")
+            )
+        if res.get("quality_grade") == "R":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Dispatch Quality Inspection REJECTED (Grade R, Score {res.get('quality_score', 0.0):.1f}/100). Cannot dispatch produce that fails quality grading."
+            )
+
+        if res.get("quality_score") is None:
+            # CV could not produce a score (product unsupported by the current
+            # model, blurry photo, model unavailable). quality_score is NOT NULL,
+            # so proceed without a CV inspection rather than writing None to it -
+            # matches how non-CV-gradable products are already handled below.
+            order.status = "quality_verified"
+            db.commit()
+            return {"message": f"Farm dispatch photo recorded ({res.get('message', 'Visual grading unavailable')})", "inspection_id": None}
 
         insp = QualityInspection(
             product_id=order.product_id,
@@ -457,7 +477,7 @@ def upload_delivery_inspection_photo(
 
     # 2. Run CV Analysis on delivery image for gradable produce
     engine = get_inference_engine()
-    res = engine.analyze_image(filepath)
+    res = engine.analyze_image(filepath, expected_product=product.product_type)
 
     deliv_insp = QualityInspection(
         product_id=order.product_id,
@@ -465,8 +485,14 @@ def upload_delivery_inspection_photo(
         inspection_level="delivery",
         image_url=image_url,
         cv_results=res.get("cv_breakdown", {}),
-        quality_score=res.get("quality_score", 0.0),
-        quality_grade=res.get("quality_grade", "A"),
+        # quality_score/quality_grade are NOT NULL. When the CV result has no
+        # score (unsupported product, blurry photo, model unavailable),
+        # res.get(key, default) would still return None since the key IS
+        # present - default to a "failed inspection" pair (0.0 / "R") so this
+        # can't insert a null and instead falls through the variance/dispute
+        # gate below like any other quality failure.
+        quality_score=res.get("quality_score") if res.get("quality_score") is not None else 0.0,
+        quality_grade=res.get("quality_grade") if res.get("quality_grade") is not None else "R",
         defects_detected=res.get("cv_breakdown", {}).get("detected_defects", []),
         model_confidence=res.get("neural_confidence", 0.0),
         model_version="imagenet-resnet18-real-v1",
