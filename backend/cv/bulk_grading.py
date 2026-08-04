@@ -50,8 +50,8 @@ def filter_overlapping_boxes(detections: list, iou_threshold: float = 0.5) -> li
 def grade_bulk(
     image_path: str,
     expected_product: str,
-    crop_shrink_factor: float = 0.75,
-    det_conf_threshold: float = 0.75
+    crop_shrink_factor: float = 0.95,
+    det_conf_threshold: float = 0.65
 ) -> dict:
     if not os.path.exists(image_path):
         return {"status": "error", "message": f"File not found: {image_path}"}
@@ -128,7 +128,7 @@ def grade_bulk(
         print(f"[DEBUG item #{idx+1}] yolo_class={det.get('class_name', expected_product)}, "
               f"yolo_conf={det.get('confidence', 1.0):.4f}, pred_prod={pred_prod}, "
               f"prod_conf={prod_conf:.2f}, expected={expected_product}, "
-              f"cv_status={cv_status}, quality_score={raw_score}, included={'yes' if included else 'no'}"
+              f"cv_status={cv_status}, quality_score={raw_score}, condition={condition}, included={'yes' if included else 'no'}"
               + (f" (reason: {exclude_reason})" if exclude_reason else ""))
 
         det_entry = {
@@ -155,16 +155,25 @@ def grade_bulk(
     total_detected = len(all_detections)
     matching_total = len(matching_crops)
 
-    # --- BATCH-LEVEL MISMATCH CHECK (Top 5 Highest-Detection-Confidence Crops) ---
-    sorted_all_crops = sorted(matching_crops + excluded_crops, key=lambda c: c["weight"], reverse=True)
-    top_5_crops = sorted_all_crops[:5]
-    disagree_crops = [c for c in top_5_crops if not c["is_match"] and c["product_conf"] >= 60.0]
-
-    has_batch_mismatch_warning = False
-    if len(top_5_crops) >= 3 and len(disagree_crops) >= (len(top_5_crops) / 2.0):
-        has_batch_mismatch_warning = True
-        most_common_found = Counter(c["pred_product"] for c in disagree_crops).most_common(1)[0][0]
-        print(f"[Bulk Grading Warning] Possible product mismatch detected: Majority of top crops look like {most_common_found.title()}, expected {expected_product.title()}.")
+    # --- BATCH-LEVEL MISMATCH CHECK ---
+    confident_crops = [c for c in matching_crops + excluded_crops if c.get("product_conf", 0.0) >= 35.0]
+    conf_disagree = [c for c in confident_crops if not c["is_match"]]
+    print(f"[DEBUG MISMATCH] total={len(matching_crops)}, confident={len(confident_crops)}, disagree={len(conf_disagree)}")
+    if len(confident_crops) >= 2 and conf_disagree:
+        most_common_found, disagree_count = Counter(c["pred_product"] for c in conf_disagree).most_common(1)[0]
+        print(f"[DEBUG MISMATCH DETAILS] most_common={most_common_found}, disagree_count={disagree_count}, threshold={max(2, int(len(confident_crops) * 0.4))}")
+        if disagree_count >= max(2, int(len(confident_crops) * 0.4)):
+            mismatch_msg = f"Product Mismatch Detected: This photo appears to contain {most_common_found.replace('_', ' ').title()} ({disagree_count} of {len(confident_crops)} items checked), but you selected {expected_product.title()}. Please upload a photo of {expected_product.title()}."
+            print(f"[Bulk Grading Mismatch] {mismatch_msg}")
+            return {
+                "status": "mismatch",
+                "product_mismatch": True,
+                "quality_grade": "R",
+                "quality_score": 0.0,
+                "batch_grade": "R",
+                "weighted_quality_score": 0.0,
+                "message": mismatch_msg
+            }
 
     fresh_count = 0
     minor_count = 0
@@ -182,17 +191,20 @@ def grade_bulk(
         box = item["bbox"]
         x1, y1, x2, y2 = box
 
-        if cond == "fresh":
-            fresh_count += 1
-            color = (0, 220, 0)
-        elif cond == "minor_defect":
+        probs = item.get("probs", {})
+        prob_defect = probs.get("defect", probs.get("major_defect", 0.0))
+
+        if cond in ["major_defect", "defect"] or score < 60.0 or prob_defect > 0.4:
+            major_count += 1
+            color = (0, 0, 255)
+            defective_items.append({"item": item["index"], "condition": "major_defect", "score": score})
+        elif cond == "minor_defect" or score < 80.0 or prob_defect > 0.2:
             minor_count += 1
             color = (0, 200, 255)
             defective_items.append({"item": item["index"], "condition": "minor_defect", "score": score})
         else:
-            major_count += 1
-            color = (0, 0, 255)
-            defective_items.append({"item": item["index"], "condition": "major_defect", "score": score})
+            fresh_count += 1
+            color = (0, 220, 0)
 
         weighted_score_sum += score * weight
         weight_sum += weight
@@ -217,24 +229,26 @@ def grade_bulk(
         cv2.putText(annotated_img, f"EXCLUDED: {item['pred_product']}", (x1, max(15, y1 - 5)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
 
-    fresh_percent = round((fresh_count / float(matching_total)) * 100.0, 1)
-    defect_percent = round(((minor_count + major_count) / float(matching_total)) * 100.0, 1)
+    defect_count = minor_count + major_count
+    fresh_percent = round((fresh_count / float(matching_total)) * 100.0, 1) if matching_total > 0 else 0.0
+    defect_percent = round((defect_count / float(matching_total)) * 100.0, 1) if matching_total > 0 else 0.0
 
     final_score = round(weighted_score_sum / weight_sum, 1) if weight_sum > 0 else 0.0
 
-    if final_score >= 88.0 and fresh_percent >= 80.0:
+    # Strict batch grading: If any item is defective (e.g. 1 rotten tomato), Grade CANNOT be A!
+    if defect_count == 0 and final_score >= 85.0 and fresh_percent >= 90.0:
         batch_grade = "A"
-    elif final_score >= 72.0 and fresh_percent >= 60.0:
+    elif major_count <= 1 and fresh_percent >= 65.0 and final_score >= 68.0:
         batch_grade = "B"
-    elif final_score >= 50.0 and fresh_percent >= 50.0:
+    elif fresh_percent >= 45.0 and final_score >= 48.0:
         batch_grade = "C"
     else:
         batch_grade = "R"
 
     excluded_reasons = Counter([it["exclude_reason"] for it in excluded_crops])
     print(f"[SUMMARY DEBUG] total_items_detected={total_detected}, items_included={matching_total}, "
-          f"items_excluded_reasons={dict(excluded_reasons)}, weighted_score_sum={weighted_score_sum:.2f}, "
-          f"weight_sum={weight_sum:.2f}, final_score={final_score}, final_grade={batch_grade}")
+          f"items_excluded_reasons={dict(excluded_reasons)}, fresh={fresh_count}, defective={defect_count}, "
+          f"defect_percent={defect_percent}%, final_score={final_score}, final_grade={batch_grade}")
 
     ripeness_note = None
     if expected_product.lower() == "tomato" and ripeness_labels:
@@ -245,7 +259,7 @@ def grade_bulk(
     cv2.imwrite(BULK_ANNOTATED_PATH, annotated_img)
 
     excl_msg = f" ({len(excluded_crops)} item excluded)" if excluded_crops else ""
-    message = f"Bulk Inspection Complete: {fresh_count} of {matching_total} {expected_product}s fresh ({fresh_percent}%). Batch Grade {batch_grade}. Weighted Score: {final_score}/100.{excl_msg}"
+    message = f"Bulk Inspection Complete: {fresh_count} of {matching_total} {expected_product}s fresh ({fresh_percent}%). Defect Coverage: {defect_percent}%. Batch Grade {batch_grade}. Weighted Score: {final_score}/100.{excl_msg}"
 
     batch_result = {
         "status": "graded",
@@ -260,8 +274,11 @@ def grade_bulk(
         "major_defect_count": major_count,
         "fresh_percent": fresh_percent,
         "defect_percent": defect_percent,
+        "defect_coverage_percent": defect_percent,
         "weighted_quality_score": final_score,
+        "quality_score": final_score,
         "batch_grade": batch_grade,
+        "quality_grade": batch_grade,
         "ripeness_note": ripeness_note,
         "defective_items": defective_items,
         "item_results": item_results,
