@@ -1,7 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Leaf, UserPlus } from 'lucide-react';
+import { Leaf, UserPlus, FileText } from 'lucide-react';
+import api from '../services/api';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -11,6 +12,7 @@ const Register = () => {
     name: '',
     phone: ''
   });
+  const [certFile, setCertFile] = useState(null);
   const [error, setError] = useState('');
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -24,8 +26,23 @@ const Register = () => {
     setError('');
     try {
       const u = await register(formData);
-      if (u.role === 'farmer') navigate('/farmer/dashboard');
-      else navigate('/marketplace');
+      if (u.role === 'farmer') {
+        if (certFile) {
+          try {
+            const fd = new FormData();
+            fd.append('file', certFile);
+            fd.append('cert_body', 'IOA');
+            fd.append('cert_number', 'IOA-REG-2026');
+            fd.append('expiry_date', '2027-12-31');
+            await api.post('/api/profile/me/certificate', fd);
+          } catch (certErr) {
+            console.error('Post-registration cert upload error:', certErr);
+          }
+        }
+        navigate('/profile');
+      } else {
+        navigate('/marketplace');
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed.');
     }
@@ -116,6 +133,23 @@ const Register = () => {
               onChange={handleChange}
             />
           </div>
+
+          {formData.role === 'farmer' && (
+            <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl space-y-2">
+              <label className="block text-xs font-bold text-amber-900 uppercase flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-amber-700" /> Organic Certificate (PDF or Photo)
+              </label>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setCertFile(e.target.files[0])}
+                className="w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-amber-700 file:text-white hover:file:bg-amber-800 cursor-pointer"
+              />
+              <p className="text-[11px] text-amber-800 leading-tight">
+                Upload your official organic certificate for admin verification.
+              </p>
+            </div>
+          )}
 
           <button
             type="submit"

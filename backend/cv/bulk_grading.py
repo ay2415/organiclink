@@ -69,7 +69,7 @@ def grade_bulk(
     synonyms = PRODUCT_SYNONYMS.get(expected_product.lower(), [expected_product.lower()])
 
     if not all_detections:
-        all_detections = [{"box": [0, 0, w, h], "confidence": 1.0, "label": expected_product.lower()}]
+        all_detections = [{"bbox": [0, 0, w, h], "box": [0, 0, w, h], "confidence": 1.0, "label": expected_product.lower()}]
 
     annotated_img = img.copy()
     matching_crops = []
@@ -77,7 +77,7 @@ def grade_bulk(
     skipped_count = 0
 
     for idx, det in enumerate(all_detections):
-        x1, y1, x2, y2 = det["bbox"]
+        x1, y1, x2, y2 = det.get("bbox", det.get("box", [0, 0, w, h]))
 
         bw = x2 - x1
         bh = y2 - y1

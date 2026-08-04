@@ -195,9 +195,9 @@ def upload_profile_photo(
 @router.post("/profile/me/certificate")
 def upload_farmer_certificate(
     file: UploadFile = File(...),
-    cert_body: str = Form(...),
-    cert_number: str = Form(...),
-    expiry_date: str = Form(...),
+    cert_body: Optional[str] = Form("IOA"),
+    cert_number: Optional[str] = Form("IOA-REG-2026"),
+    expiry_date: Optional[str] = Form("2027-12-31"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
