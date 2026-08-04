@@ -362,6 +362,10 @@ class OrderResponse(BaseModel):
     farmer_name: Optional[str] = None
     buyer_name: Optional[str] = None
     farm_name: Optional[str] = None
+    farm_eircode: Optional[str] = None
+    farm_town: Optional[str] = None
+    farm_county: Optional[str] = None
+    farm_full_address: Optional[str] = None
     quantity: float
     quantity_unit: str
     price_per_unit: float

@@ -260,7 +260,7 @@ class GradingInferenceEngine:
             "defect_coverage_percent": clamp(defect_coverage),
         }
 
-    def analyze_image(self, image_path, expected_product="unknown"):
+    def analyze_image(self, image_path, expected_product="unknown", skip_mismatch=False):
         if os.path.exists(MODEL_PATH) and os.path.getmtime(MODEL_PATH) > self.last_mtime:
             self.load_model()
 
@@ -297,14 +297,14 @@ class GradingInferenceEngine:
         predicted_product = product_classes[top_idx]
         predicted_conf = float(prod_probs[top_idx].item() * 100.0)
 
-        if predicted_conf < MIN_CONFIDENCE_TO_ACCEPT:
+        if predicted_conf < MIN_CONFIDENCE_TO_ACCEPT and not skip_mismatch:
             return {"status": "unclear_image", "product_mismatch": False,
                     "quality_grade": None, "quality_score": None,
                     "message": (f"Could not confidently identify the produce "
                                 f"({predicted_conf:.0f}% confidence). Retake in good "
                                 f"light, produce filling the frame, plain background.")}
 
-        if expected != "unknown":
+        if expected != "unknown" and not skip_mismatch:
             expected_idx = product_classes.index(expected)
             expected_conf = float(prod_probs[expected_idx].item() * 100.0)
             synonyms = PRODUCT_SYNONYMS.get(expected, [expected])

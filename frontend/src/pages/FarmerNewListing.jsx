@@ -122,8 +122,8 @@ const FarmerNewListing = () => {
 
   const handleSubmitListing = async (e) => {
     e.preventDefault();
-    if (!imageFile) {
-      setError('Please select and upload a produce photo.');
+    if (!imageFile && productType !== 'milk') {
+      setError('Please select and upload a produce photo for visual quality grading.');
       return;
     }
 
@@ -144,7 +144,9 @@ const FarmerNewListing = () => {
       formData.append('is_bulk', isBulk);
       formData.append('description', description);
       formData.append('buyer_types_open_to', JSON.stringify(['consumer', 'retailer', 'restaurant', 'institution', 'manufacturer']));
-      formData.append('image', imageFile);
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
 
       await api.post(`/api/farms/${farmId}/products`, formData);
       navigate('/marketplace');

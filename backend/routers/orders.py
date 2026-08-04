@@ -403,7 +403,7 @@ def dispatch_order(
 @router.post("/{order_id}/delivery-photo")
 def upload_delivery_inspection_photo(
     order_id: str,
-    image: UploadFile = File(...),
+    image: Optional[UploadFile] = File(None),
     buyer_action: Optional[str] = Form("auto"), # auto, negotiate, reject
     proposed_price_per_unit: Optional[float] = Form(None),
     negotiation_note: Optional[str] = Form(None),
@@ -419,25 +419,33 @@ def upload_delivery_inspection_photo(
     if order.status != "in_transit":
         raise HTTPException(status_code=409, detail=f"Delivery inspection requires status 'in_transit', current is '{order.status}'")
 
-    # 1. Save delivery image
-    ext = os.path.splitext(image.filename)[1] or ".jpg"
-    filename = f"deliv_insp_{uuid.uuid4().hex}{ext}"
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-    filepath = os.path.join(UPLOADS_DIR, filename)
-    with open(filepath, "wb") as f:
-        f.write(image.file.read())
+    product = db.query(Product).filter(Product.id == order.product_id).first()
+    prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
+    is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
 
-    image_url = f"/static/uploads/{filename}"
+    if is_cv_gradable and not image:
+        raise HTTPException(status_code=400, detail="Delivery photo is required for visual produce quality inspection.")
 
-    # Record photo (A5)
-    photo_rec = Photo(
-        file_path=image_url,
-        uploaded_by=current_user.id,
-        purpose="delivery_inspection",
-        product_id=order.product_id,
-        order_id=order.id
-    )
-    db.add(photo_rec)
+    if image:
+        ext = os.path.splitext(image.filename)[1] or ".jpg"
+        filename = f"deliv_insp_{uuid.uuid4().hex}{ext}"
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        filepath = os.path.join(UPLOADS_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(image.file.read())
+        image_url = f"/static/uploads/{filename}"
+
+        photo_rec = Photo(
+            file_path=image_url,
+            uploaded_by=current_user.id,
+            purpose="delivery_inspection",
+            product_id=order.product_id,
+            order_id=order.id
+        )
+        db.add(photo_rec)
+    else:
+        filepath = None
+        image_url = "/static/images/default_product.png"
 
     product = db.query(Product).filter(Product.id == order.product_id).first()
     prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
@@ -830,6 +838,11 @@ def build_order_response(order: Order, db: Session) -> OrderResponse:
     res.farmer_name = farmer.name if farmer else "Farmer"
     res.buyer_name = buyer.name if buyer else "Buyer"
     res.farm_name = farm.farm_name if farm else "Organic Farm"
+    if farm:
+        res.farm_eircode = farm.eircode
+        res.farm_town = farm.town
+        res.farm_county = farm.county
+        res.farm_full_address = f"{farm.farm_name}, {farm.town}, Co. {farm.county}, Eircode: {farm.eircode}"
     res.invoice_url = payment.invoice_url if payment else None
 
     if farm_insp:

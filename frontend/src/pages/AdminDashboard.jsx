@@ -269,7 +269,21 @@ const AdminDashboard = () => {
                 <tr key={f.id} className="hover:bg-gray-50">
                   <td className="p-3 font-bold text-gray-900">{f.farm_name}</td>
                   <td className="p-3">{f.town}, Co. {f.county}</td>
-                  <td className="p-3 font-semibold text-emerald-800">{f.organic_cert_body} ({f.organic_cert_number})</td>
+                  <td className="p-3">
+                    <div className="font-semibold text-emerald-800">{f.organic_cert_body || 'Organic Cert'} ({f.organic_cert_number || 'N/A'})</div>
+                    {f.cert_doc_url ? (
+                      <a
+                        href={f.cert_doc_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-bold underline mt-1"
+                      >
+                        <FileText className="w-3.5 h-3.5" /> View Uploaded Certificate
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-gray-400 italic">No document uploaded</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     <button onClick={()=>handleVerifyFarm(f.id, true)} className="px-3 py-1 bg-emerald-700 text-white font-bold rounded text-xs hover:bg-emerald-800">
                       Approve Organic Certification

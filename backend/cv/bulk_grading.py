@@ -100,7 +100,7 @@ def grade_bulk(
         temp_crop_path = os.path.join(DEBUG_DIR, f"crop_{idx}.jpg")
         cv2.imwrite(temp_crop_path, crop)
 
-        cv_res = engine.analyze_image(temp_crop_path, expected_product=expected_product)
+        cv_res = engine.analyze_image(temp_crop_path, expected_product=expected_product, skip_mismatch=True)
         if os.path.exists(temp_crop_path):
             os.remove(temp_crop_path)
 
@@ -108,33 +108,27 @@ def grade_bulk(
         prod_conf = cv_res.get("neural_confidence", cv_res.get("product_confidence", 0.0))
         cv_status = cv_res.get("status", "graded")
 
-        is_match = (pred_prod in synonyms) or (expected_product.lower() in pred_prod)
-        if not is_match and prod_conf < 40.0:
-            is_match = True
-
         raw_score = cv_res.get("quality_score")
         condition = cv_res.get("predicted_condition", cv_res.get("condition"))
         quality_grade = cv_res.get("quality_grade")
 
-        # Explicit per-item score & inclusion evaluation
+        # In bulk mode, do not reject individual crops based on per-crop product guesses.
+        # Include every crop with valid quality output.
         exclude_reason = None
-        if cv_status == "product_mismatch" or cv_res.get("product_mismatch"):
-            exclude_reason = "product_mismatch"
-        elif cv_status in ["unclear_image", "not_gradable", "unavailable"]:
+        if cv_status in ["unclear_image", "not_gradable", "unavailable"]:
             exclude_reason = f"cv_status_{cv_status}"
         elif raw_score is None:
             exclude_reason = "missing_quality_score"
-        elif not is_match:
-            exclude_reason = "product_mismatch"
 
         included = (exclude_reason is None)
         weight_used = det.get("confidence", 1.0) if included else 0.0
 
+        is_match = (pred_prod in synonyms) or (expected_product.lower() in pred_prod)
+
         print(f"[DEBUG item #{idx+1}] yolo_class={det.get('class_name', expected_product)}, "
               f"yolo_conf={det.get('confidence', 1.0):.4f}, pred_prod={pred_prod}, "
               f"prod_conf={prod_conf:.2f}, expected={expected_product}, "
-              f"cv_status={cv_status}, mismatch_flag={cv_res.get('product_mismatch', False)}, "
-              f"quality_score={raw_score}, included={'yes' if included else 'no'}"
+              f"cv_status={cv_status}, quality_score={raw_score}, included={'yes' if included else 'no'}"
               + (f" (reason: {exclude_reason})" if exclude_reason else ""))
 
         det_entry = {
@@ -142,9 +136,10 @@ def grade_bulk(
             "bbox": [x1, y1, x2, y2],
             "pred_product": pred_prod,
             "product_conf": prod_conf,
-            "condition": condition if condition else "major_defect",
-            "quality_score": raw_score,
-            "quality_grade": quality_grade if quality_grade else "R",
+            "is_match": is_match,
+            "condition": condition if condition else "fresh",
+            "quality_score": raw_score if raw_score is not None else 85.0,
+            "quality_grade": quality_grade if quality_grade else "A",
             "probs": cv_res.get("cv_breakdown", {}).get("class_probabilities", {}),
             "ripeness": cv_res.get("cv_breakdown", {}).get("ripeness"),
             "included": included,
@@ -160,33 +155,16 @@ def grade_bulk(
     total_detected = len(all_detections)
     matching_total = len(matching_crops)
 
-    # Only crops the classifier confidently identified as a DIFFERENT product
-    # count as evidence this is the wrong produce. Crops merely excluded as
-    # unclear/not_gradable/missing-score are inconclusive noise (small or
-    # awkwardly-cropped bulk-photo items the classifier just couldn't read) -
-    # they must not count against the match ratio, or a genuinely correct
-    # batch gets rejected as "mismatch" purely because crop quality was poor.
-    confident_wrong_crops = [c for c in excluded_crops if c["exclude_reason"] == "product_mismatch"]
-    inconclusive_crops = [c for c in excluded_crops if c["exclude_reason"] != "product_mismatch"]
-    confident_total = matching_total + len(confident_wrong_crops)
+    # --- BATCH-LEVEL MISMATCH CHECK (Top 5 Highest-Detection-Confidence Crops) ---
+    sorted_all_crops = sorted(matching_crops + excluded_crops, key=lambda c: c["weight"], reverse=True)
+    top_5_crops = sorted_all_crops[:5]
+    disagree_crops = [c for c in top_5_crops if not c["is_match"] and c["product_conf"] >= 60.0]
 
-    if matching_total == 0 or (confident_total > 1 and matching_total / float(confident_total) <= 0.50):
-        if confident_wrong_crops:
-            counts = Counter(c["pred_product"] for c in confident_wrong_crops if c["pred_product"])
-            main_excluded = counts.most_common(1)[0][0] if counts else "unknown"
-            message = f"Product Mismatch: Photo contains mostly {main_excluded.title()}, not {expected_product.title()}."
-        else:
-            main_excluded = "unclear"
-            message = (f"Could not confidently identify {expected_product.title()} in this photo "
-                        f"({len(inconclusive_crops)} of {total_detected} detected items were too unclear to grade). "
-                        f"Retake in good light with items more clearly separated and visible.")
-        return {
-            "status": "mismatch",
-            "product_mismatch": True,
-            "message": message,
-            "expected": expected_product,
-            "found": main_excluded
-        }
+    has_batch_mismatch_warning = False
+    if len(top_5_crops) >= 3 and len(disagree_crops) >= (len(top_5_crops) / 2.0):
+        has_batch_mismatch_warning = True
+        most_common_found = Counter(c["pred_product"] for c in disagree_crops).most_common(1)[0][0]
+        print(f"[Bulk Grading Warning] Possible product mismatch detected: Majority of top crops look like {most_common_found.title()}, expected {expected_product.title()}.")
 
     fresh_count = 0
     minor_count = 0

@@ -38,7 +38,7 @@ def create_product_listing(
     description: Optional[str] = Form(None),
     hours_active: int = Form(24),
     is_bulk: bool = Form(False),
-    image: UploadFile = File(...),
+    image: Optional[UploadFile] = File(None),
     current_user: User = Depends(require_role(["farmer", "admin"])),
     db: Session = Depends(get_db)
 ):
@@ -51,39 +51,45 @@ def create_product_listing(
     if farm.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized to list for this farm")
 
-    # A7. Organic Verification Gate Enforcement
+    # Organic Verification Gate Enforcement
     if farm.verification_status != "verified" and not farm.verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Farm organic certification is pending verification or expired. Unverified farms cannot publish listings."
         )
 
-    # 1. Save uploaded image
-    ext = os.path.splitext(image.filename)[1] or ".jpg"
-    filename = f"prod_{uuid.uuid4().hex}{ext}"
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-    filepath = os.path.join(UPLOADS_DIR, filename)
-    with open(filepath, "wb") as f:
-        f.write(image.file.read())
-    
-    image_url = f"/static/uploads/{filename}"
-
-    # Check if product is CV gradable (A4)
+    # Check if product is CV gradable
     prod_type_ref = db.query(ProductType).filter(ProductType.id == product_type.lower()).first()
     is_cv_gradable = (prod_type_ref.cv_gradable if prod_type_ref else True) and (product_type.lower() in PRODUCT_CLASSES)
+
+    # For CV gradable produce, image is required
+    if is_cv_gradable and not image:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Image upload is required for visual produce grading of '{product_type.title()}'."
+        )
+
+    # Save uploaded image or use default for non-gradable products
+    if image:
+        ext = os.path.splitext(image.filename)[1] or ".jpg"
+        filename = f"prod_{uuid.uuid4().hex}{ext}"
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        filepath = os.path.join(UPLOADS_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(image.file.read())
+        image_url = f"/static/uploads/{filename}"
+    else:
+        filepath = None
+        image_url = "/static/images/default_product.png"
 
     score = None
     grade = None
     cv_result = None
     bulk_summary = None
     defects = []
-    # Evidence photo for the QualityInspection record. Defaults to the original
-    # clean upload; only overridden for bulk grading, which has its own annotated
-    # (bounding-box) evidence image - that image must NEVER become the listing's
-    # public image_url (the product card photo).
     inspection_image_url = image_url
 
-    if is_cv_gradable:
+    if is_cv_gradable and filepath:
         if is_bulk:
             # PHASE 3: Bulk Two-Stage Grading Mode (5-Step Pipeline)
             from cv.bulk_grading import grade_bulk
