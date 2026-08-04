@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Leaf, UserPlus, FileText } from 'lucide-react';
-import api from '../services/api';
+import api from '../api/axios';
 
 const Register = () => {
   const [formData, setFormData] = useState({
