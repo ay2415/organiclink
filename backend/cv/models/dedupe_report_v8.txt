@@ -1,0 +1,8 @@
+DEDUPE REPORT (v8, all datasets combined)
+==================================================
+Total images hashed:     75849
+Near-duplicate groups:   16196
+Images with a twin:      46867 (61.8%)
+Colliding pairs:         96037
+Clean grouped split:     train 60627 / val 15222
+Twins confined to one side -> NO train/val leakage.

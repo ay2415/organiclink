@@ -35,7 +35,7 @@ from cv.grading import compute_quality_score, score_to_grade, calibrate_probabil
 # Set MODEL_CHOICE to switch models with a single word change:
 #   "grading_model"  -> Uses models/grading_model.pt (current: 14 produce classes, binary defect head)
 #   "quality_model"  -> Uses models_backup/quality_model.pt (15 produce classes, 3-way defect head)
-MODEL_CHOICE = "grading_model"
+MODEL_CHOICE = "grading_model_2026_08_01_ep14"
 # ======================================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

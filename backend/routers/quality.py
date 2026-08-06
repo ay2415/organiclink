@@ -83,15 +83,18 @@ def analyze_image_quality(
         engine = get_inference_engine()
         res = engine.analyze_image(filepath, expected_product=product_type)
 
+    quality_score = res.get("quality_score") if res.get("quality_score") is not None else 0.0
+    quality_grade = res.get("quality_grade") if res.get("quality_grade") is not None else "R"
+
     inspection = QualityInspection(
         product_id=product_id,
         inspection_level=inspection_level,
         image_url=image_url,
         cv_results=res.get("cv_breakdown", {}),
-        quality_score=res.get("quality_score", 0.0),
-        quality_grade=res.get("quality_grade", "R"),
+        quality_score=quality_score,
+        quality_grade=quality_grade,
         defects_detected=res.get("cv_breakdown", {}).get("detected_defects", []),
-        model_confidence=0.0,
+        model_confidence=res.get("neural_confidence", 0.0),
         model_version="1.1",
         inspector_id=current_user.id
     )
