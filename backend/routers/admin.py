@@ -46,6 +46,16 @@ def verify_farm(
         raise HTTPException(status_code=404, detail="Farm not found")
 
     farm.verified = verify_in.verified
+    if verify_in.verified:
+        farm.verification_status = "verified"
+        if farm.owner:
+            farm.owner.verified = True
+            farm.owner.status = "verified"
+    else:
+        farm.verification_status = "rejected"
+        if farm.owner:
+            farm.owner.verified = False
+            farm.owner.status = "unverified"
     db.commit()
 
     log_audit_event(
