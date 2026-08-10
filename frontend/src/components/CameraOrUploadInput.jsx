@@ -98,6 +98,11 @@ export default function CameraOrUploadInput({
     <div className="space-y-3">
       {label && <label className="block text-sm font-semibold text-gray-700">{label}</label>}
 
+      {/* Concealed Produce Mitigation Tip */}
+      <div className="p-2.5 bg-amber-50/90 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium leading-relaxed">
+        <strong>💡 Multi-Angle Quality Tip:</strong> You can upload multiple photos or snap different angles (including items from the middle/bottom of the tray). OrganicLink evaluates all photos and enforces the lowest quality score to prevent hidden defect issues.
+      </div>
+
       {/* Side-by-side Action Buttons */}
       <div className="flex flex-wrap gap-3">
         <button

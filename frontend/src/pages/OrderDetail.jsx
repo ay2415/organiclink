@@ -155,8 +155,8 @@ const OrderDetail = () => {
     return <div className="p-12 text-center text-emerald-800 font-bold">Loading Order Detail...</div>;
   }
 
-  const isFarmer = user?.id === order.farmer_id || user?.role === 'farmer';
-  const isBuyer = user?.id === order.buyer_id || user?.role !== 'farmer' && user?.role !== 'admin';
+  const isFarmer = user?.id === order.farmer_id || user?.role === 'admin';
+  const isBuyer = user?.id === order.buyer_id || user?.role === 'admin';
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">

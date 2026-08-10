@@ -99,13 +99,15 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     if user_in.role not in valid_roles:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of {valid_roles}")
 
+    is_farmer = (user_in.role == "farmer")
     new_user = User(
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
         role=user_in.role,
         name=user_in.name,
         phone=user_in.phone,
-        verified=(user_in.role == "admin") # auto verify admin
+        status="pending" if is_farmer else "verified",
+        verified=(user_in.role == "admin") or (not is_farmer) # auto verify buyers & admins, farmers require cert approval
     )
     db.add(new_user)
     db.commit()
@@ -122,6 +124,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
             size_hectares=10.0,
             farm_type="mixed",
             verified=False,
+            verification_status="pending_verification",
             reputation_score=100.0,
             total_orders_completed=0
         )

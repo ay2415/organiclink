@@ -285,9 +285,14 @@ const AdminDashboard = () => {
                     )}
                   </td>
                   <td className="p-3">
-                    <button onClick={()=>handleVerifyFarm(f.id, true)} className="px-3 py-1 bg-emerald-700 text-white font-bold rounded text-xs hover:bg-emerald-800">
-                      Approve Organic Certification
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={()=>handleVerifyFarm(f.id, true)} className="px-3 py-1 bg-emerald-700 text-white font-bold rounded text-xs hover:bg-emerald-800">
+                        Approve
+                      </button>
+                      <button onClick={()=>handleVerifyFarm(f.id, false)} className="px-3 py-1 bg-rose-700 text-white font-bold rounded text-xs hover:bg-rose-800">
+                        Reject
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

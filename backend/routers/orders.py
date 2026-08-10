@@ -283,7 +283,8 @@ def negotiate_order(
 @router.post("/{order_id}/farm-photo")
 def upload_farm_inspection_photo(
     order_id: str,
-    image: UploadFile = File(...),
+    image: Optional[UploadFile] = File(None),
+    images: Optional[List[UploadFile]] = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -291,33 +292,72 @@ def upload_farm_inspection_photo(
     if not order or (current_user.id != order.farmer_id and current_user.role != "admin"):
         raise HTTPException(status_code=403, detail="Only farmer can upload farm inspection photo")
 
-    ext = os.path.splitext(image.filename)[1] or ".jpg"
-    filename = f"farm_insp_{uuid.uuid4().hex}{ext}"
+    upload_files: List[UploadFile] = []
+    if images:
+        upload_files.extend([f for f in images if f and f.filename])
+    if image and image.filename and image not in upload_files:
+        upload_files.insert(0, image)
+
+    if not upload_files:
+        raise HTTPException(status_code=400, detail="At least one image file is required for inspection.")
+
+    image_paths = []
+    image_urls = []
     os.makedirs(UPLOADS_DIR, exist_ok=True)
-    filepath = os.path.join(UPLOADS_DIR, filename)
-    with open(filepath, "wb") as f:
-        f.write(image.file.read())
+    for up_file in upload_files:
+        up_file.file.seek(0)
+        ext = os.path.splitext(up_file.filename)[1] or ".jpg"
+        filename = f"farm_insp_{uuid.uuid4().hex}{ext}"
+        filepath = os.path.join(UPLOADS_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(up_file.file.read())
+        image_paths.append(filepath)
+        photo_url = f"/static/uploads/{filename}"
+        image_urls.append(photo_url)
 
-    photo_url = f"/static/uploads/{filename}"
-
-    # Record photo (A5)
-    photo_rec = Photo(
-        file_path=photo_url,
-        uploaded_by=current_user.id,
-        purpose="farm_inspection",
-        product_id=order.product_id,
-        order_id=order.id
-    )
-    db.add(photo_rec)
+        photo_rec = Photo(
+            file_path=photo_url,
+            uploaded_by=current_user.id,
+            purpose="farm_inspection",
+            product_id=order.product_id,
+            order_id=order.id
+        )
+        db.add(photo_rec)
+    db.commit()
 
     product = db.query(Product).filter(Product.id == order.product_id).first()
     prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
     is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
 
     if is_cv_gradable:
-        engine = get_inference_engine()
-        res = engine.analyze_image(filepath, expected_product=product.product_type)
+        worst_res = None
+        lowest_score = 999.0
+        primary_photo_url = image_urls[0]
 
+        for idx, filepath in enumerate(image_paths):
+            abs_filepath = os.path.abspath(filepath)
+            if product and product.is_bulk:
+                from cv.bulk_grading import grade_bulk
+                cur_res = grade_bulk(abs_filepath, expected_product=product.product_type)
+            else:
+                engine = get_inference_engine()
+                cur_res = engine.analyze_image(abs_filepath, expected_product=product.product_type)
+
+            if cur_res.get("product_mismatch"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=cur_res.get("message", f"Product mismatch detected on photo #{idx+1}.")
+                )
+
+            cur_score = cur_res.get("quality_score", 0.0)
+            if cur_score < lowest_score:
+                lowest_score = cur_score
+                worst_res = cur_res
+                primary_photo_url = image_urls[idx]
+
+        res = worst_res
+
+        print(f"[DEBUG dispatch] abs_filepath={abs_filepath}, exists={os.path.exists(abs_filepath)}, res={res}")
         if res.get("product_mismatch"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -342,7 +382,7 @@ def upload_farm_inspection_photo(
             product_id=order.product_id,
             order_id=order.id,
             inspection_level="farm",
-            image_url=photo_url,
+            image_url=primary_photo_url,
             cv_results=res.get("cv_breakdown", {}),
             quality_score=res.get("quality_score") if res.get("quality_score") is not None else 0.0,
             quality_grade=res.get("quality_grade") if res.get("quality_grade") is not None else "A",
@@ -404,6 +444,7 @@ def dispatch_order(
 def upload_delivery_inspection_photo(
     order_id: str,
     image: Optional[UploadFile] = File(None),
+    images: Optional[List[UploadFile]] = File(None),
     buyer_action: Optional[str] = Form("auto"), # auto, negotiate, reject
     proposed_price_per_unit: Optional[float] = Form(None),
     negotiation_note: Optional[str] = Form(None),
@@ -423,29 +464,40 @@ def upload_delivery_inspection_photo(
     prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
     is_cv_gradable = prod_type_ref.cv_gradable if prod_type_ref else True
 
-    if is_cv_gradable and not image:
+    upload_files: List[UploadFile] = []
+    if images:
+        upload_files.extend([f for f in images if f and f.filename])
+    if image and image.filename and image not in upload_files:
+        upload_files.insert(0, image)
+
+    if is_cv_gradable and not upload_files:
         raise HTTPException(status_code=400, detail="Delivery photo is required for visual produce quality inspection.")
 
-    if image:
-        ext = os.path.splitext(image.filename)[1] or ".jpg"
+    image_paths = []
+    image_urls = []
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    for up_file in upload_files:
+        up_file.file.seek(0)
+        ext = os.path.splitext(up_file.filename)[1] or ".jpg"
         filename = f"deliv_insp_{uuid.uuid4().hex}{ext}"
-        os.makedirs(UPLOADS_DIR, exist_ok=True)
         filepath = os.path.join(UPLOADS_DIR, filename)
         with open(filepath, "wb") as f:
-            f.write(image.file.read())
-        image_url = f"/static/uploads/{filename}"
+            f.write(up_file.file.read())
+        image_paths.append(filepath)
+        photo_url = f"/static/uploads/{filename}"
+        image_urls.append(photo_url)
 
         photo_rec = Photo(
-            file_path=image_url,
+            file_path=photo_url,
             uploaded_by=current_user.id,
             purpose="delivery_inspection",
             product_id=order.product_id,
             order_id=order.id
         )
         db.add(photo_rec)
-    else:
-        filepath = None
-        image_url = "/static/images/default_product.png"
+    db.commit()
+
+    primary_image_url = image_urls[0] if image_urls else "/static/images/default_product.png"
 
     product = db.query(Product).filter(Product.id == order.product_id).first()
     prod_type_ref = db.query(ProductType).filter(ProductType.id == product.product_type.lower()).first() if product else None
@@ -483,15 +535,33 @@ def upload_delivery_inspection_photo(
 
         return {"message": "Milk delivery confirmed without CV variance check", "status": "delivered"}
 
-    # 2. Run CV Analysis on delivery image for gradable produce
-    engine = get_inference_engine()
-    res = engine.analyze_image(filepath, expected_product=product.product_type)
+    # 2. Run CV Analysis on delivery images for gradable produce
+    worst_res = None
+    lowest_score = 999.0
+    primary_deliv_image_url = image_urls[0] if image_urls else "/static/images/default_product.png"
+
+    for idx, filepath in enumerate(image_paths):
+        abs_filepath = os.path.abspath(filepath)
+        if product and product.is_bulk:
+            from cv.bulk_grading import grade_bulk
+            cur_res = grade_bulk(abs_filepath, expected_product=product.product_type)
+        else:
+            engine = get_inference_engine()
+            cur_res = engine.analyze_image(abs_filepath, expected_product=product.product_type)
+
+        cur_score = cur_res.get("quality_score") if cur_res.get("quality_score") is not None else 0.0
+        if cur_score < lowest_score:
+            lowest_score = cur_score
+            worst_res = cur_res
+            primary_deliv_image_url = image_urls[idx]
+
+    res = worst_res or {}
 
     deliv_insp = QualityInspection(
         product_id=order.product_id,
         order_id=order.id,
         inspection_level="delivery",
-        image_url=image_url,
+        image_url=primary_deliv_image_url,
         cv_results=res.get("cv_breakdown", {}),
         # quality_score/quality_grade are NOT NULL. When the CV result has no
         # score (unsupported product, blurry photo, model unavailable),

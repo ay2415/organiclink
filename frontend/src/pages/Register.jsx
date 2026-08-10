@@ -24,6 +24,12 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (formData.role === 'farmer' && !certFile) {
+      setError('Organic Certificate upload is mandatory for Farmer registration. Please attach your certificate.');
+      return;
+    }
+
     try {
       const u = await register(formData);
       if (u.role === 'farmer') {
@@ -39,7 +45,7 @@ const Register = () => {
             console.error('Post-registration cert upload error:', certErr);
           }
         }
-        navigate('/profile');
+        navigate('/pending-approval');
       } else {
         navigate('/marketplace');
       }

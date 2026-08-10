@@ -55,7 +55,7 @@ def verify_farm(
         farm.verification_status = "rejected"
         if farm.owner:
             farm.owner.verified = False
-            farm.owner.status = "unverified"
+            farm.owner.status = "rejected"
     db.commit()
 
     log_audit_event(

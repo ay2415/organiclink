@@ -6,7 +6,7 @@ import GradeBadge from '../components/GradeBadge';
 import CVBreakdownPanel from '../components/CVBreakdownPanel';
 import {
   MapPin, ShieldCheck, Download, Award, ShoppingCart, MessageSquare,
-  TrendingUp, Truck, AlertCircle
+  TrendingUp, Truck, AlertCircle, QrCode
 } from 'lucide-react';
 
 const ProductDetail = () => {
@@ -194,6 +194,23 @@ const ProductDetail = () => {
             <div className="text-xs text-amber-700 font-bold flex items-center gap-1">
               <Award className="w-3.5 h-3.5" /> Farmer Reputation: {farmer?.reputation_score?.toFixed(1)} / 100
             </div>
+          </div>
+
+          {/* Traceability QR Code Card */}
+          <div className="p-4 bg-emerald-50/80 rounded-xl border border-emerald-200 text-center space-y-2">
+            <div className="flex items-center justify-center gap-1 text-xs font-bold text-emerald-900 uppercase">
+              <QrCode className="w-4 h-4 text-emerald-700" /> Produce Traceability Passport
+            </div>
+            <Link to={`/traceability/product/${product.id}`} className="block">
+              <img
+                src={`/api/traceability/qr?url=${encodeURIComponent(`${window.location.origin}/traceability/product/${product.id}`)}`}
+                alt="Traceability QR Code"
+                className="w-24 h-24 mx-auto rounded border border-emerald-300 shadow-sm hover:scale-105 transition-transform"
+              />
+            </Link>
+            <Link to={`/traceability/product/${product.id}`} className="text-[11px] font-extrabold text-emerald-800 hover:underline block">
+              Scan or Click to view Farm & Cert Passport →
+            </Link>
           </div>
 
           {/* Order Form */}

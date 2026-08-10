@@ -38,6 +38,11 @@ def get_own_profile(
     farm_data = None
     if current_user.role == "farmer":
         farm = db.query(Farm).filter(Farm.user_id == current_user.id).first()
+        if current_user.status in ["pending", "unverified", "rejected"] or not current_user.verified or (farm and farm.verification_status != "verified"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account pending admin approval. You cannot access seller profile features until your organic certificate is approved."
+            )
         if farm:
             farm_data = {
                 "id": farm.id,

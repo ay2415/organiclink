@@ -31,6 +31,7 @@ from routers.production_logs import router as production_logs_router
 from routers.local_hubs import router as local_hubs_router
 from routers.profile import router as profile_router
 from routers.delivery import router as delivery_router
+from routers.traceability import router as traceability_router
 
 app = FastAPI(
     title="OrganicLink API",
@@ -72,6 +73,7 @@ app.include_router(production_logs_router)
 app.include_router(local_hubs_router)
 app.include_router(profile_router)
 app.include_router(delivery_router)
+app.include_router(traceability_router)
 
 
 @app.on_event("startup")
