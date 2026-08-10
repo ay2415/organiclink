@@ -308,6 +308,7 @@ class GradingInferenceEngine:
                                 f"({predicted_conf:.0f}% confidence). Retake in good "
                                 f"light, produce filling the frame, plain background.")}
 
+
         if expected != "unknown" and not skip_mismatch:
             expected_idx = product_classes.index(expected)
             expected_conf = float(prod_probs[expected_idx].item() * 100.0)
