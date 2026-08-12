@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 # --- Auth Schemas ---
@@ -116,8 +116,7 @@ class FarmResponse(BaseModel):
     verified: bool = True
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserResponse(BaseModel):
@@ -144,8 +143,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     farm: Optional[FarmResponse] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Farm & Production Schemas ---
@@ -175,8 +173,7 @@ class FarmUpdate(BaseModel):
 
 
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProductionCreate(BaseModel):
@@ -197,8 +194,7 @@ class ProductionResponse(BaseModel):
     unit: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Contract Schemas ---
@@ -242,8 +238,7 @@ class ContractResponse(BaseModel):
     fulfillment_percent: Optional[float] = 100.0
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Product & Marketplace Schemas ---
@@ -282,8 +277,7 @@ class ProductResponse(BaseModel):
     expires_at: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SurplusSuggestion(BaseModel):
@@ -310,8 +304,7 @@ class QualityInspectionResponse(BaseModel):
     inspector_id: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Order Schemas ---
@@ -391,8 +384,7 @@ class OrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Payment & Rating Schemas ---
@@ -411,8 +403,7 @@ class PaymentResponse(BaseModel):
     reference_number: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaymentMarkPaid(BaseModel):
@@ -440,8 +431,7 @@ class RatingResponse(BaseModel):
     review_text: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Message & Notification Schemas ---
@@ -468,8 +458,7 @@ class MessageResponse(BaseModel):
     read_at: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationResponse(BaseModel):
@@ -481,8 +470,7 @@ class NotificationResponse(BaseModel):
     read_at: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Hub Directory Schema ---
@@ -500,8 +488,7 @@ class HubDirectoryResponse(BaseModel):
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # --- Admin Schemas ---

@@ -39,9 +39,8 @@ def setup_test_db():
     # Drop all safely for SQLite
     with engine.connect() as conn:
         conn.execute(text("PRAGMA foreign_keys = OFF;"))
-        for table in reversed(Base.metadata.sorted_tables):
-            conn.execute(text(f"DROP TABLE IF EXISTS {table.name};"))
         conn.commit()
+    Base.metadata.drop_all(bind=engine)
 
 
 def override_get_db():

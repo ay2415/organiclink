@@ -4,6 +4,7 @@ Serves OpenAPI docs at /docs.
 """
 
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,12 +34,28 @@ from routers.profile import router as profile_router
 from routers.delivery import router as delivery_router
 from routers.traceability import router as traceability_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Initializing Database Tables...")
+    Base.metadata.create_all(bind=engine)
+
+    print("Initializing Computer Vision Quality Grading Model...")
+    try:
+        engine_inst = get_inference_engine()
+        print("CV Inference Engine Ready.")
+    except Exception as e:
+        print(f"Warning: CV Inference Engine delayed initialization: {e}")
+    yield
+
+
 app = FastAPI(
     title="OrganicLink API",
     description="Irish Organic Farm Surplus Marketplace with Computer Vision Quality Grading",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS configuration
@@ -74,19 +91,6 @@ app.include_router(local_hubs_router)
 app.include_router(profile_router)
 app.include_router(delivery_router)
 app.include_router(traceability_router)
-
-
-@app.on_event("startup")
-def startup_event():
-    print("Initializing Database Tables...")
-    Base.metadata.create_all(bind=engine)
-
-    print("Initializing Computer Vision Quality Grading Model...")
-    try:
-        engine_inst = get_inference_engine()
-        print("CV Inference Engine Ready.")
-    except Exception as e:
-        print(f"Warning: CV Inference Engine delayed initialization: {e}")
 
 
 @app.get("/api/health")

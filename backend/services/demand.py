@@ -7,7 +7,7 @@ Hybrid model:
   is_estimate = True, basis = "seasonal".
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from models import Order, AuditLog
 
@@ -28,7 +28,7 @@ def get_product_demand(db: Session, product_type: str, county: str = None) -> di
     Computes demand score (0-100) and whether it is an activity-based calculation or seasonal estimate.
     """
     clean_type = product_type.lower().strip() if product_type else "onion"
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
     # Count recent order activity for this product type
     order_query = db.query(Order).filter(
@@ -61,7 +61,7 @@ def get_product_demand(db: Session, product_type: str, county: str = None) -> di
         }
     else:
         # Fallback to seasonal baseline
-        current_month = datetime.utcnow().month
+        current_month = datetime.now(timezone.utc).month
         baseline_dict = SEASONAL_DEMAND_BASELINE.get(clean_type, {m: 60 for m in range(1, 13)})
         seasonal_score = float(baseline_dict.get(current_month, 60))
 

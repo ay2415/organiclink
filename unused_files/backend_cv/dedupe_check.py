@@ -39,6 +39,7 @@ IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 THRESHOLD = 3
 
 
+
 def collect(root, split_label):
     """Walk a folder. Assumes class name is the immediate parent folder."""
     items = []

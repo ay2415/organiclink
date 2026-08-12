@@ -1,5 +1,5 @@
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB_PATH = os.path.join(BASE_DIR, "organiclink.db").replace("\\", "/")
@@ -17,8 +17,6 @@ class Settings(BaseSettings):
     COMMISSION_PERCENT: float = 5.0
     PAYMENT_TERMS_DAYS: int = 14
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
