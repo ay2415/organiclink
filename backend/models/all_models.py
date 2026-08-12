@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy import (
     Column, String, Float, Integer, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum
 )
@@ -8,6 +8,9 @@ from database import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class User(Base):
     __tablename__ = "users"
@@ -33,7 +36,7 @@ class User(Base):
     profile_photo_url = Column(String(500), nullable=True)
     verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     farm = relationship("Farm", back_populates="owner", uselist=False, cascade="all, delete-orphan")
 
@@ -66,7 +69,7 @@ class Farm(Base):
     total_orders_completed = Column(Integer, default=0)
     average_quality_score = Column(Float, nullable=True)
     verified = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     owner = relationship("User", back_populates="farm")
     production_history = relationship("ProductionHistory", back_populates="farm", cascade="all, delete-orphan")
@@ -87,7 +90,7 @@ class ProductionHistory(Base):
     month = Column(Integer, nullable=True) # null = annual total
     quantity = Column(Float, nullable=False)
     unit = Column(String(20), nullable=False) # kg, litre
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     farm = relationship("Farm", back_populates="production_history")
 
@@ -101,7 +104,7 @@ class ProductType(Base):
     default_unit = Column(String(20), default="kg") # kg, litre
     default_log_type = Column(String(20), default="batch") # daily, batch
     cv_gradable = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class ProductionLog(Base):
@@ -116,7 +119,7 @@ class ProductionLog(Base):
     quantity = Column(Float, nullable=False)
     unit = Column(String(20), nullable=False) # kg, litre
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     farm = relationship("Farm", back_populates="production_logs")
 
@@ -130,7 +133,7 @@ class Photo(Base):
     purpose = Column(String(50), nullable=False) # listing, farm_inspection, delivery_inspection, certificate_doc, profile
     product_id = Column(String(36), ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
     order_id = Column(String(36), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class Contract(Base):
@@ -153,7 +156,7 @@ class Contract(Base):
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     is_deleted = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     farm = relationship("Farm", back_populates="contracts")
 
@@ -186,8 +189,8 @@ class Product(Base):
     status = Column(String(50), default="pending_quality", index=True) # pending_quality, listed, sold_out, expired
     description = Column(Text, nullable=True)
     expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     farm = relationship("Farm", back_populates="products")
     inspection = relationship("QualityInspection", foreign_keys=[quality_inspection_id])
@@ -205,7 +208,7 @@ class DeliveryRule(Base):
     delivery_fee_eur = Column(Float, default=0.0)
     free_over_eur = Column(Float, nullable=True)
     offers_pickup = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     farm = relationship("Farm", back_populates="delivery_rules")
 
@@ -225,7 +228,7 @@ class DeliverySlot(Base):
     capacity_kg = Column(Float, default=100.0)
     booked_kg = Column(Float, default=0.0)
     zone_note = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     farm = relationship("Farm", back_populates="delivery_slots")
 
@@ -242,7 +245,7 @@ class DeliveryRun(Base):
     committed_kg = Column(Float, default=0.0)
     status = Column(String(20), default="open", index=True) # open, confirmed, cancelled, delivered
     closes_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class QualityInspection(Base):
@@ -260,7 +263,7 @@ class QualityInspection(Base):
     model_confidence = Column(Float, nullable=True)
     model_version = Column(String(50), default="effnetb0-v1")
     inspector_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class Order(Base):
@@ -292,8 +295,8 @@ class Order(Base):
     dispute_status = Column(String(50), nullable=True) # open, resolved
     dispute_resolution = Column(String(50), nullable=True) # full_payment, partial_payment, refund_buyer
     dispute_rationale = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     product = relationship("Product")
     farmer = relationship("User", foreign_keys=[farmer_id])
@@ -317,7 +320,7 @@ class Payment(Base):
     status = Column(String(50), default="pending", index=True) # pending, held, paid, partial, refunded
     invoice_url = Column(String(500), nullable=True)
     reference_number = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     order = relationship("Order")
 
@@ -335,7 +338,7 @@ class RatingReview(Base):
     communication = Column(Integer, default=5) # 1-5
     reliability = Column(Integer, default=5) # 1-5
     review_text = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class Message(Base):
@@ -350,7 +353,7 @@ class Message(Base):
     message_text = Column(Text, nullable=False)
     attachment_url = Column(String(500), nullable=True)
     read_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class Notification(Base):
@@ -362,7 +365,7 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     action_url = Column(String(500), nullable=True)
     read_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class AuditLog(Base):
@@ -374,7 +377,7 @@ class AuditLog(Base):
     actor_id = Column(String(36), nullable=True)
     actor_role = Column(String(50), nullable=True)
     details = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class HubDirectory(Base):
@@ -391,7 +394,7 @@ class HubDirectory(Base):
     accepts_products = Column(JSON, default=list) # e.g. ["onion", "milk", "apple"]
     contact_email = Column(String(255), nullable=True)
     contact_phone = Column(String(50), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 
 class AdminSetting(Base):
