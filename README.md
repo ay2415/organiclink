@@ -1,140 +1,168 @@
-# OrganicLink: Direct-Trade Organic Agricultural Marketplace & Dual-Inspection Quality Assurance Platform
+# OrganicLink: A Computer-Vision Marketplace for Irish Organic Producers with Automated Produce Quality Grading
 
 [![Python 3.13](https://img.shields.io/badge/Backend-Python_3.13_|_FastAPI_|_SQLAlchemy_2.0-green.svg)](https://fastapi.tiangolo.com)
 [![PyTorch](https://img.shields.io/badge/CV_Engine-PyTorch_|_ResNet--18_Multi--Head-orange.svg)](https://pytorch.org)
 [![YOLOv8](https://img.shields.io/badge/Object_Detection-YOLOv8_Bulk_Inspection-yellow.svg)](https://ultralytics.com)
 [![React 18](https://img.shields.io/badge/Frontend-React_18_|_Vite_|_Tailwind_CSS-blue.svg)](https://vitejs.dev)
 [![QR Passport](https://img.shields.io/badge/Traceability-Digital_QR_Produce_Passport-emerald.svg)](#)
-[![License](https://img.shields.io/badge/Thesis_Project-MSc_Computer_Science-purple.svg)](#)
+[![UL MEng Project](https://img.shields.io/badge/MEng-Computer_Vision_&_AI_|_University_of_Limerick-purple.svg)](#)
 
-**OrganicLink** is an enterprise-grade B2B/B2C agricultural marketplace and computer-vision quality assurance platform built specifically for the Irish organic farming ecosystem. It connects certified Irish organic produce and dairy farmers directly with commercial buyers (retailers, farm-to-fork restaurants, institutions, aggregators, and consumers) to market surplus yields exceeding fixed processor contracts.
+---
 
-The platform integrates a two-stage **YOLOv8 + ResNet-18 Computer Vision Quality Engine**, a **Dual-Inspection Quality Variance Tracking System (±10% transit rule)**, an **Admin Organic Certification Verification Gate**, and an instant **Digital QR Produce Traceability Passport**.
+### Project Metadata
+* **Full Title**: OrganicLink: A Computer-Vision Marketplace for Irish Organic Producers with Automated Produce Quality Grading
+* **Author**: Aashrith Sai Yamsani (Student ID: 25287419)
+* **Degree**: MEng in Computer Vision and Artificial Intelligence
+* **Module**: CE6013 Digital Futures Project
+* **Institution**: University of Limerick
+* **Supervisors**: Dr. Elfed Lewis (CE6013), Dr. Annmarie Ryan (Digital Futures Lab)
+
+---
+
+## Executive Summary
+
+**OrganicLink** is a full-stack web marketplace and computer-vision quality-assessment platform designed for the Irish organic agricultural sector. It connects certified Irish organic produce and dairy farmers directly with commercial buyers (retailers, farm-to-fork restaurants, institutions, aggregators, and consumers) to enable direct trade of surplus yields exceeding fixed processor contracts.
+
+The platform addresses the central trust barrier in remote produce transactions: the impossibility of verifying produce quality at a distance. OrganicLink solves this through a novel **Dual-Inspection Quality Variance Protocol** (grading produce at both dispatch and delivery using the identical model to automatically detect transit quality drops), a **Two-Stage YOLOv8 + ResNet-18 Bulk Grading Pipeline**, **Perceptual Hashing Leakage Control**, an **Admin Organic Certificate Verification Gate**, and an instant **Digital QR Produce Traceability Passport**.
 
 ---
 
 ## Table of Contents
-1. [Platform Overview & Business Model](#platform-overview--business-model)
-2. [Key System Capabilities](#key-system-capabilities)
-3. [Computer Vision Subsystem Architecture](#computer-vision-subsystem-architecture)
-4. [Digital QR Produce Passport & Traceability](#digital-qr-produce-passport--traceability)
-5. [System Architecture & Technology Stack](#system-architecture--technology-stack)
-6. [Project Directory Layout](#project-directory-layout)
-7. [API Endpoint Reference](#api-endpoint-reference)
-8. [Frontend Routes & Components](#frontend-routes--components)
-9. [Seeded Demonstration Login Credentials](#seeded-demonstration-login-credentials)
-10. [Installation & Setup Instructions](#installation--setup-instructions)
-11. [Automated Verification & Testing](#automated-verification--testing)
+1. [The Organic Market-Access Problem in Ireland](#the-organic-market-access-problem-in-ireland)
+2. [Key Contributions & Core Features](#key-contributions--core-features)
+3. [Computer Vision Architecture & Hybrid Scoring](#computer-vision-architecture--hybrid-scoring)
+4. [Dual-Inspection Variance Protocol (Main Contribution)](#dual-inspection-variance-protocol-main-contribution)
+5. [Two-Stage Bulk Produce Grading Pipeline](#two-stage-bulk-produce-grading-pipeline)
+6. [Dataset Quality & Perceptual Hashing Leakage Control](#dataset-quality--perceptual-hashing-leakage-control)
+7. [Digital QR Code Produce Passport](#digital-qr-code-produce-passport)
+8. [System Architecture & Technology Stack](#system-architecture--technology-stack)
+9. [Project Directory Layout](#project-directory-layout)
+10. [API Endpoint Reference](#api-endpoint-reference)
+11. [Frontend Routes & Components](#frontend-routes--components)
+12. [Seeded Demonstration Login Credentials](#seeded-demonstration-login-credentials)
+13. [Installation & Setup Instructions](#installation--setup-instructions)
+14. [Resume Bullet Points & Elevator Pitch](#resume-bullet-points--elevator-pitch)
 
 ---
 
-## Platform Overview & Business Model
+## The Organic Market-Access Problem in Ireland
 
-Certified organic farmers in Ireland operate under rigid processor and aggregator contracts. For example:
-- A farmer produces **100 kg** of organic tomatoes or apples per month.
-- A retail contract commits **80 kg/month** (graded, packed, and delivered to distribution hubs).
-- This leaves **20 kg surplus per month** with no direct market channel — traditionally wasted or sold at non-organic prices.
+Demand for organic food in Ireland has grown steadily, supported by national policy targets to significantly expand organic farmland. However, small, dispersed organic producers face major barriers in reaching buyers:
+- **Vegetable Sector (Cosmetic Rejection)**: Over **122,398 tonnes** of vegetables are lost at the farm level annually in Ireland (EPA Research 410, 2022). Approximately **30%** of fruit and vegetables are rejected by commercial retail buyers solely on cosmetic standards (Irish Examiner, 2024), despite being completely fit to eat.
+- **Meat Sector (Leakage)**: Estimates indicate that **70%** of organic lambs and **30%** of organic cattle are processed as conventional (Agriland, 2024), forfeiting their organic premium due to weak links to organic processors and buyers.
+- **Dairy Sector (Unsold Surplus)**: Consultation with Teagasc organic dairy specialist Joe Kelleher highlighted that Ireland's small organic milk pool (around 80 farmers nationally) produces surplus volume beyond processor contracts that lacks direct market mechanisms.
 
-OrganicLink models this business logic: $$\text{Surplus} = \text{Produced Yield} - \text{Contracted Volume}$$
+**The Core Challenge**: Trust in remote transactions. Buyers cannot inspect produce physically; disputes over produce condition upon arrival reduce to subjective ("he-said-she-said") arguments. OrganicLink provides an objective, automated, evidence-based quality verification layer.
 
-The platform automatically prompts farmers to list surplus yield directly to local buyers within regional transport range, preserving organic premium value, ensuring legal organic verification, and preventing agricultural food waste.
+---
+
+## Key Contributions & Core Features
+
+### 1. Dual-Inspection Quality Variance Protocol
+- Produce is graded at two points: first by the farmer at **Dispatch**, and again by the buyer at **Delivery Arrival**.
+- Uses the exact same multi-head model at both ends to yield an objective, comparable score.
+- If quality drops beyond an acceptable tolerance ($\text{Variance} > 10\%$), payment is held in escrow and a negotiation step opens, escalating to admin dispute resolution only if negotiation fails.
+
+### 2. Multi-Role Direct-Trade Marketplace
+- Supports 4 distinct user roles: Farmers (sellers), Commercial Buyers (retailers, restaurants, institutions, manufacturers), Consumers, and Administrators.
+- Features direct produce listing, browsing, filtering by county/Eircode routing key, in-app price/quantity negotiation, and payment status tracking.
+
+### 3. Farmer Organic Registration Gate & Admin Queue
+- Farmer registration requires an organic certificate upload (`verification_status="pending_verification"`).
+- Pending accounts are blocked from accessing seller dashboards, profile pages, and listing creation until reviewed.
+- Admin dashboard (`AdminDashboard.jsx`) provides explicit **Approve** and **Reject** controls.
+
+### 4. Deliberate Design Boundaries
+- **Visually Gradable Produce**: Automated CV quality grading is applied exclusively to fruits and vegetables where decay and blemishes are visually observable.
+- **Certificate-Based Products**: Milk (chemical/bacterial quality) and Meat (handling/safety) are non-visually gradable; quality is managed via administrative certification.
+- **Organic Provenance**: Organic authenticity cannot be detected visually; it is verified strictly through official certification (e.g. IOA / Organic Trust).
+
+---
+
+## Computer Vision Architecture & Hybrid Scoring
+
+The computer-vision engine (`backend/cv/`) employs a **ResNet-18 Multi-Head Classifier** pre-trained on ImageNet:
+- **Shared Backbone**: ResNet-18 extracts feature representations.
+- **Product Head**: Classifies 14 produce types (`apple`, `banana`, `capsicum`, `carrot`, `cucumber`, `grape`, `guava`, `jujube`, `mango`, `orange`, `pomegranate`, `potato`, `strawberry`, `tomato`).
+- **Defect Head**: Binary classification (`fresh` vs `defect`).
+
+### Hybrid Scoring Formula (80:20 Weighting)
+To ground neural learned patterns with physically interpretable appearance properties, final quality scores combine neural classifier probability (80%) with OpenCV classical metrics (20%):
+
+$$\text{Final Score} = 0.80 \times (\text{Neural Quality Score}) + 0.20 \times (\text{Classical OpenCV Metrics})$$
+
+Where OpenCV metrics analyze:
+1. **Colour Vibrancy**: Mean saturation in HSV space.
+2. **Colour Uniformity**: Hue variation.
+3. **Surface Defect Coverage**: Adaptive thresholding identifying discoloured/damaged surface regions.
+
+Scores ($0-100$) map to letter grades:
+- `Score >= 90.0` $\rightarrow$ **Grade A** (Premium)
+- `Score >= 75.0` $\rightarrow$ **Grade B** (Good)
+- `Score >= 50.0` $\rightarrow$ **Grade C** (Fair)
+- `Score < 50.0` $\rightarrow$ **Grade R** (Reject)
+
+---
+
+## Dual-Inspection Variance Protocol (Main Contribution)
+
+$$\text{Quality Variance \%} = \left( \frac{\text{Dispatch Score} - \text{Delivery Score}}{\text{Dispatch Score}} \right) \times 100$$
 
 ```
-+-------------------------------------------------------------------------------------------------------+
-|                                    ORGANICLINK END-TO-END WORKFLOW                                    |
-+-------------------------------------------------------------------------------------------------------+
-|  FARMER REGISTRATION  --> Uploads Organic Cert --> Pending Admin Review (Blocked from Selling)        |
-|  ADMIN APPROVAL       --> Admin Reviews Certificate --> APPROVE / REJECT --> Active Seller Status      |
-|  LISTING CREATION     --> Upload Produce Photo --> Whole-Image Pre-Check & ResNet/YOLOv8 Grading     |
-|  B2B ORDER & NEGOTIATE--> Buyer Places Claim / Negotiates Price & Quantity                            |
-|  FARM DISPATCH        --> Farmer Uploads Dispatch Photo --> Farm Inspection Recorded                  |
-|  DELIVERY ARRIVAL     --> Buyer Uploads Delivery Photo --> Arrival Inspection & Variance Calc         |
-|  AUTOMATED AUDIT      --> Variance <= 10%: RELEASE PAYMENT | Variance > 10%: DISPUTE ESCROW           |
-|  QR TRACEABILITY      --> Scan Digital QR Passport for Farm Origin, Cert & 3-Stage Inspection Log     |
-+-------------------------------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------+
+|                                 DUAL-INSPECTION VARIANCE LIFECYCLE                                |
++---------------------------------------------------------------------------------------------------+
+|  1. DISPATCH INSPECTION --> Farmer uploads photo before shipping --> Score A (94.0/100)          |
+|  2. DELIVERY INSPECTION --> Buyer uploads photo upon arrival       --> Score A (92.5/100)          |
+|  3. VARIANCE CHECK     --> (94.0 - 92.5) / 94.0 * 100 = 1.6% drop  --> Within 10% Tolerance        |
+|  4. RESOLUTION         --> PASS: Order Completed, Invoice Generated, Escrow Payment Released      |
+|  5. IF VARIANCE > 10%  --> DISPUTE: Payment Held, Negotiation Step Opened, Admin Escalation    |
++---------------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## Key System Capabilities
+## Two-Stage Bulk Produce Grading Pipeline
 
-### 1. Farmer Registration & Admin Approval Gate
-- **Mandatory Certificate Upload**: Farmers must upload an organic certificate during registration.
-- **Pending Gating**: Accounts are created in a `pending` state, restricting access to seller dashboards, marketplace listing creation, and profile features. A dedicated **"Waiting for Admin Approval"** view (`PendingApproval.jsx`) informs the farmer of their status.
-- **Admin Review Queue**: Platform administrators evaluate uploaded certificates in `AdminDashboard.jsx` with explicit **Approve** and **Reject** controls. Approval unlocks active status (`status="verified"`), while rejection keeps the account locked (`status="rejected"`).
+For multi-item photographs (baskets or crates of produce), single-image classification is insufficient. OrganicLink implements a **Two-Stage YOLOv8 + ResNet-18 Pipeline** (`backend/cv/bulk_grading.py`):
 
-### 2. Dual-Inspection Quality Engine & ±10% Transit Variance Rule
-- Quality is evaluated twice per transaction: at **Farm Dispatch** (by the seller) and upon **Delivery Arrival** (by the buyer).
-- **Quality Variance Calculation**:
-  $$\text{Variance \%} = \left( \frac{\text{Farm Score} - \text{Delivery Score}}{\text{Farm Score}} \right) \times 100$$
-  - $\le 10.00\%$: **PASS** $\rightarrow$ Order marked `delivered`, invoice PDF generated, payment released.
-  - $> 10.00\%$: **DISPUTE** $\rightarrow$ Order marked `disputed`, payment held in escrow, admin arbitration alert triggered.
-
-### 3. Whole-Image Product Mismatch Pre-Check
-- Prevents mislabeling fraud in bulk grading. Before localizing item bounding boxes, the whole image is evaluated against the trained product classifier.
-- If the predicted produce type disagrees with the user's selected produce (e.g. tomato selected but banana photo uploaded), inspection immediately returns a `Product Mismatch` error and halts grading.
-
-### 4. Concealed Produce Multi-Photo Evaluation
-- Supports multi-angle image uploads for listing creation, dispatch inspection, and delivery inspection.
-- The inspection engine analyzes every uploaded photo and assigns the **lowest quality score / worst grade** across all angles to ensure conservative quality guarantees.
-
-### 5. Digital QR Code Produce Passport
-- Generates downloadable PNG QR codes (`GET /api/traceability/qr`) encoding unique traceability URLs.
-- Provides public traceability records (`GET /api/traceability/order/{id}` and `GET /api/traceability/product/{id}`) detailing farm of origin, IOA organic license, listing harvest grade, dispatch timestamp, buyer recipient details, dispatch grade, delivery date, arrival grade, and transit quality variance.
-
-### 6. Dynamic Regional Demand Indicator
-- Hybrid 30-day demand engine: computes real-time demand scores ($0-100$) based on active regional orders and marketplace searches. If local activity is low, it seamlessly falls back to Irish seasonal crop baselines.
+1. **Whole-Image Product Pre-Check**: Evaluates full photo against ResNet-18 classifier to catch product mismatches before item detection.
+2. **YOLOv8 Detection & NMS Filtering**: Localizes individual items, applies Non-Maximum Suppression (IoU=0.50), and shrinks bounding boxes by 95% inner crop ratio to eliminate neighboring pixel bleed.
+3. **Item Crop Classification**: Crops detected items and grades each individually using the ResNet-18 defect head.
+4. **Batch Aggregation**: Aggregates item results into a fair batch grade (e.g. "3 of 4 items fresh") rather than condemning an entire basket for a single defective item.
 
 ---
 
-## Computer Vision Subsystem Architecture
+## Dataset Quality & Perceptual Hashing Leakage Control
 
-The computer vision engine (`backend/cv/`) combines deep learning classification, object detection, and colorimetry:
+Public produce datasets contain extensive duplicate and near-duplicate imagery (e.g., re-photographed items or augmented duplicates). If split randomly across train and test sets, models exhibit **data leakage**, inflating reported accuracy through memorization.
 
-```
-+---------------------------------------------------------------------------------------------------+
-|                                5-STEP BULK PRODUCE GRADING PIPELINE                               |
-+---------------------------------------------------------------------------------------------------+
-|  STEP 1: WHOLE-IMAGE PRODUCT PRE-CHECK                                                            |
-|  Evaluates full photo against ResNet-18 Product Classifier. Halts if product mismatch detected.   |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|  STEP 2: DETECT & NMS FILTERING                                                                   |
-|  YOLOv8 produce detector localizes individual items. Non-Maximum Suppression (IoU=0.50) drops     |
-|  overlapping boxes. Bounding boxes shrunk by 95% inner ratio to prevent neighbor edge bleed.      |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|  STEP 3: MULTI-HEAD QUALITY CLASSIFICATION                                                        |
-|  Evaluates crops using ResNet-18 Defect Head (fresh vs defect) + OpenCV HSV color metrics         |
-|  (vibrancy, uniformity, brightness, defect coverage).                                             |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|  STEP 4: SCORE & GRADE BANDING AGGREGATION                                                        |
-|  Blends 80% neural classifier confidence + 20% OpenCV color metrics.                              |
-|  Maps final score to Grade Bands: >= 90% Grade A | >= 75% Grade B | >= 50% Grade C | < 50% Grade R.   |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|  STEP 5: ANNOTATED RENDER & DIAGNOSTICS                                                           |
-|  Generates annotated debug bounding box visualization for inspection diagnostics.                 |
-+---------------------------------------------------------------------------------------------------+
-```
-
-### Verified Produce Classes (14):
-`apple`, `banana`, `capsicum`, `carrot`, `cucumber`, `grape`, `guava`, `jujube`, `mango`, `orange`, `pomegranate`, `potato`, `strawberry`, `tomato`.
+- **Perceptual Hashing**: Images were hashed using perceptual hashing (Hamming distance). The audit revealed **34.7% to 61.8%** near-duplicate contamination across datasets.
+- **Leakage-Free Grouped Split**: Implemented a grouped train/validation split where every group of near-duplicates was assigned exclusively to either train or test.
+- **Held-Out Model Performance**:
+  - **Product Identification Accuracy**: **96.8%** on held-out test set.
+  - **Quality Assessment Accuracy**: **98.3%** on held-out test set.
+  - **Per-Product F1-Scores**:
+    - Banana: **99.16%**
+    - Strawberry: **99.03%**
+    - Pomegranate: **98.70%**
+    - Apple: **98.41%**
+    - Orange: **97.83%**
+    - Grape: **97.56%**
+    - Mango: **97.01%**
+    - Guava: **96.47%**
+    - Cucumber: **95.65%**
+    - Tomato: **95.24%**
+    - Carrot: **94.50%**
+    - Jujube: **90.53%**
+    - Potato: **88.80%**
+    - Capsicum: **88.54%**
 
 ---
 
-## Digital QR Produce Passport & Traceability
+## Digital QR Code Produce Passport
 
-Scanning an OrganicLink QR code directs users to the interactive **Traceability Passport** (`/traceability/:type/:id`), which renders live data directly from the blockchain-ready audit pipeline:
+Every listing and order generates an instant Digital Produce Passport accessible via QR code (`GET /api/traceability/qr`):
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -186,7 +214,7 @@ Scanning an OrganicLink QR code directs users to the interactive **Traceability 
 - **Computer Vision & ML**: PyTorch, Torchvision (ResNet-18), Ultralytics YOLOv8, OpenCV.
 - **Frontend Framework**: React 18, Vite 4, TailwindCSS 3, Lucide React Icons, Axios, React Router v6.
 - **Document Generation**: ReportLab PDF Engine (Certificates & Invoices).
-- **Database**: SQLite by default for local development (`backend/organiclink.db`); PostgreSQL supported via `DATABASE_URL` / Docker Compose.
+- **Database**: SQLite by default for development (`backend/organiclink.db`); PostgreSQL supported for production deployment.
 
 ---
 
@@ -195,13 +223,13 @@ Scanning an OrganicLink QR code directs users to the interactive **Traceability 
 ```
 organiclink/
 ├── backend/                      FastAPI Application Root
-│   ├── main.py                   Lifespan application entrypoint & middleware configuration
+│   ├── main.py                   Lifespan application entrypoint & middleware
 │   ├── config.py                 Pydantic SettingsConfigDict (DB URL, JWT, constants)
-│   ├── database.py                SQLAlchemy engine and session factory
+│   ├── database.py                SQLAlchemy engine & session factory
 │   ├── models/
-│   │   └── all_models.py         SQLAlchemy database schemas (User, Farm, Order, Inspection, etc.)
+│   │   └── all_models.py         SQLAlchemy models (User, Farm, Order, QualityInspection, etc.)
 │   ├── schemas/
-│   │   └── schemas.py            Pydantic v2 request/response schemas with ConfigDict
+│   │   └── schemas.py            Pydantic v2 schemas with ConfigDict
 │   ├── routers/                  18 REST API route modules
 │   ├── services/                 Audit, demand scoring, geo/Haversine, PDF doc generator, reputation
 │   ├── cv/
@@ -234,7 +262,7 @@ organiclink/
 
 ## API Endpoint Reference
 
-All routes are served under `/api` by FastAPI (interactive OpenAPI docs available at `/docs` and `/redoc`).
+All routes are served under `/api` by FastAPI (interactive OpenAPI docs at `/docs` and `/redoc`).
 
 | Router File | Route Prefix | Primary Endpoints & Operations |
 | :--- | :--- | :--- |
@@ -317,13 +345,12 @@ source venv/bin/activate
 # Install backend dependencies
 pip install -r requirements.txt
 
-# Seed demonstration database with Irish farms, locations, and sample products
+# Seed demonstration database
 python -m seed.seed_data
 
 # Start FastAPI development server
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-*Note: The backend automatically creates a local SQLite database (`backend/organiclink.db`) on startup. No external database configuration is needed for local development.*
 
 ### 2. Frontend Setup
 ```bash
@@ -335,25 +362,22 @@ npm install
 # Start Vite development server
 npm run dev -- --host 0.0.0.0 --port 5174
 ```
-Vite automatically proxies `/api` and `/static` requests to `http://127.0.0.1:8000`.
 
 Access the application in your browser at: `http://localhost:5174`
 
 ---
 
-## Automated Verification & Testing
+## Resume Bullet Points & Elevator Pitch
 
-To run the complete backend test suite:
-```bash
-python -m pytest backend/tests/test_organiclink.py
-```
+### Short Version:
+- Built **OrganicLink**, a full-stack computer-vision marketplace (FastAPI, React, PostgreSQL, PyTorch, YOLOv8) grading organic produce quality from photos at 96.8%/98.3% accuracy.
+- Designed a novel dual-inspection protocol that grades produce at dispatch and delivery, automatically detecting quality disputes with objective evidence.
+- Identified and corrected 34.7%+ dataset leakage via perceptual hashing, proving reported model accuracy reflected genuine generalization.
 
-To build the frontend for production:
-```bash
-npm --prefix frontend run build
-```
+### Elevator Pitch (for interviews):
+> *"OrganicLink is a marketplace I built that lets organic farmers sell directly to buyers, using AI to solve the trust problem in remote food trade. The core idea is a dual-inspection system: the AI grades the produce from a photo when it's sent and again when it's delivered, and if quality dropped in transit, it automatically flags a dispute — so there's objective evidence instead of an argument. I also found that a third of my training data were near-duplicate images inflating accuracy, so I corrected for it — which most projects never check. It's built with FastAPI, React, PostgreSQL, PyTorch, and YOLOv8."*
 
 ---
 
-### License & Thesis Notice
-Developed for MSc Computer Science Thesis. All rights reserved.
+### License & Project Information
+Developed for MEng in Computer Vision & Artificial Intelligence thesis project at University of Limerick (CE6013 Digital Futures Project). All rights reserved.
