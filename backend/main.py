@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OrganicLink API",
-    description="Irish Organic Farm Surplus Marketplace with Computer Vision Quality Grading",
+    description="OrganicLink: A Computer-Vision Marketplace for Irish Organic Producers with Automated Produce Quality Grading",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
