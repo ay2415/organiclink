@@ -55,13 +55,29 @@ def generate_quality_certificate_pdf(inspection_data: dict, farm_name: str, prod
     story.append(Paragraph(f"Official Organic Inspection Certificate | Issued by AI Quality Grading Engine", subtitle_style))
     story.append(Spacer(1, 10))
 
+    # Format defects detected safely (handles list of dicts from bulk grading or list of strings)
+    raw_defects = inspection_data.get("defects_detected", [])
+    if isinstance(raw_defects, list):
+        defect_strs = [
+            f"Item #{d.get('item_index', idx+1)}: {d.get('predicted_defect', d.get('defect_type', 'defect'))}" if isinstance(d, dict)
+            else str(d)
+            for idx, d in enumerate(raw_defects)
+        ]
+        defects_str = ", ".join(defect_strs) if defect_strs else "None"
+    elif isinstance(raw_defects, dict):
+        defects_str = ", ".join(f"{k}: {v}" for k, v in raw_defects.items())
+    elif raw_defects:
+        defects_str = str(raw_defects)
+    else:
+        defects_str = "None"
+
     # Certificate Details Table
     table_data = [
-        ["Inspection ID:", inspection_data.get("id", "N/A"), "Inspection Level:", inspection_data.get("inspection_level", "farm").upper()],
-        ["Farm Name:", farm_name, "Product Type:", product_name],
+        ["Inspection ID:", str(inspection_data.get("id", "N/A")), "Inspection Level:", str(inspection_data.get("inspection_level", "farm")).upper()],
+        ["Farm Name:", str(farm_name), "Product Type:", str(product_name)],
         ["Quality Score:", f"{inspection_data.get('quality_score', 0):.1f} / 100", "Quality Grade:", f"GRADE {inspection_data.get('quality_grade', 'N/A')}"],
-        ["Model Version:", inspection_data.get("model_version", "effnetb0-v1"), "Confidence:", f"{inspection_data.get('model_confidence', 0):.1f}%"],
-        ["Date & Time:", str(inspection_data.get("created_at", datetime.utcnow().strftime("%Y-%m-%d %H:%M"))), "Defects Detected:", ", ".join(inspection_data.get("defects_detected", [])) or "None"]
+        ["Model Version:", str(inspection_data.get("model_version", "effnetb0-v1")), "Confidence:", f"{inspection_data.get('model_confidence', 0):.1f}%"],
+        ["Date & Time:", str(inspection_data.get("created_at", datetime.utcnow().strftime("%Y-%m-%d %H:%M"))), "Defects Detected:", defects_str]
     ]
 
     t = Table(table_data, colWidths=[120, 150, 120, 150])
