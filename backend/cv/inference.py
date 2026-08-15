@@ -72,8 +72,9 @@ else:
     MODEL_VERSION = "resnet18-multihead-v7-14class-binary"
 
 CV_UNSUPPORTED_PRODUCTS = {
-    "onion": "No onion training data available - visual grading unavailable.",
-    "milk": "Milk quality cannot be assessed visually.",
+    "meat": "Meat & poultry quality indicators (hygiene standards, butchery specifications, lab certifications) are certified by declaration. Visual grading unavailable.",
+    "milk": "Milk quality indicators (fat, protein, somatic cell count) are lab-certified. Visual grading unavailable.",
+    "spinach": "Leafy greens and spinach quality are certified by declaration. Visual grading unavailable.",
     "leek": "No training data available for this product.",
     "cabbage": "No training data available for this product.",
     "lettuce": "No training data available for this product.",

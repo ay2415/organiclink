@@ -35,9 +35,10 @@ def sync_database():
         if db.query(ProductType).count() == 0:
             types = [
                 ProductType(id="milk", name="Organic Raw Milk", category="dairy", default_unit="litre", default_log_type="daily", cv_gradable=False),
+                ProductType(id="meat", name="Organic Meat & Poultry", category="meat", default_unit="kg", default_log_type="batch", cv_gradable=False),
+                ProductType(id="spinach", name="Organic Spinach / Greens", category="vegetables", default_unit="kg", default_log_type="batch", cv_gradable=False),
                 ProductType(id="cheese", name="Organic Artisan Cheese", category="dairy", default_unit="kg", default_log_type="batch", cv_gradable=True),
                 ProductType(id="tomato", name="Organic Tomato", category="vegetables", default_unit="kg", default_log_type="batch", cv_gradable=True),
-                ProductType(id="onion", name="Organic Onion", category="vegetables", default_unit="kg", default_log_type="batch", cv_gradable=True),
                 ProductType(id="apple", name="Organic Apple", category="fruit", default_unit="kg", default_log_type="batch", cv_gradable=True),
                 ProductType(id="potato", name="Organic Potato", category="vegetables", default_unit="kg", default_log_type="batch", cv_gradable=True),
                 ProductType(id="carrot", name="Organic Carrot", category="vegetables", default_unit="kg", default_log_type="batch", cv_gradable=True),

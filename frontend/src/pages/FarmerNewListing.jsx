@@ -122,7 +122,8 @@ const FarmerNewListing = () => {
 
   const handleSubmitListing = async (e) => {
     e.preventDefault();
-    if (!imageFile && productType !== 'milk') {
+    const isNonCv = ['meat', 'milk', 'spinach'].includes(productType);
+    if (!imageFile && !isNonCv) {
       setError('Please select and upload a produce photo for visual quality grading.');
       return;
     }
@@ -156,6 +157,8 @@ const FarmerNewListing = () => {
       setSubmitting(false);
     }
   };
+
+  const isNonCv = ['meat', 'milk', 'spinach'].includes(productType);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
@@ -201,10 +204,10 @@ const FarmerNewListing = () => {
                   <option value="potato">Organic Potato</option>
                 </optgroup>
 
-                <optgroup label="🥛 Non-CV & Milk Declarations">
+                <optgroup label="🥩 Non-CV & Declaration Products">
+                  <option value="meat">Organic Meat & Poultry (Declaration Only)</option>
                   <option value="milk">Organic Raw Milk (Declaration Only)</option>
-                  <option value="onion">Organic Onion (Non-CV)</option>
-                  <option value="spinach">Organic Spinach / Leafy Greens (Non-CV)</option>
+                  <option value="spinach">Organic Spinach / Leafy Greens (Declaration Only)</option>
                 </optgroup>
               </select>
             </div>
@@ -265,7 +268,7 @@ const FarmerNewListing = () => {
 
         {/* Photo Upload & CV Inspection Step */}
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-          <h3 className="font-bold text-gray-900 text-sm border-b pb-2">2. Computer Vision Quality Photo Upload</h3>
+          <h3 className="font-bold text-gray-900 text-sm border-b pb-2">2. Produce Photo & Visual Quality Step</h3>
 
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <div className="w-full sm:w-1/2 border-2 border-dashed border-emerald-200 bg-emerald-50/50 rounded-2xl p-5 text-center">
@@ -281,10 +284,22 @@ const FarmerNewListing = () => {
             </div>
 
             <div className="w-full sm:w-1/2 space-y-3">
-              {productType === 'milk' ? (
-                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-center space-y-1">
-                  <span className="text-xs font-bold text-slate-700 block">Visual grading not applicable</span>
-                  <span className="text-[11px] text-slate-500 block">Milk & liquid dairy quality indicators (fat, protein, bacteria) are lab-certified. Photo is recorded without CV grade.</span>
+              {isNonCv ? (
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      Declaration-Only Product (Non-CV)
+                    </span>
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      Optional Photo
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Quality indicators for {productType === 'meat' ? 'meat & poultry (hygiene standards, butchery cuts, lab certifications)' : productType === 'milk' ? 'raw milk & liquid dairy (fat, protein, bacteria counts)' : 'spinach & leafy greens'} are certified by producer declaration rather than automated computer vision.
+                  </p>
+                  <p className="text-[11px] text-emerald-700 font-semibold">
+                    {imageFile ? "✓ Photo attached — will be displayed on the marketplace product card without CV grading." : "Photo is optional. You can upload a photo for the marketplace product card or publish without one."}
+                  </p>
                 </div>
               ) : (
                 <>
