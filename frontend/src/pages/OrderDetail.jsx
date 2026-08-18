@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
 import GradeBadge from '../components/GradeBadge';
@@ -7,7 +7,7 @@ import VarianceBadge from '../components/VarianceBadge';
 import CVBreakdownPanel from '../components/CVBreakdownPanel';
 import CameraOrUploadInput from '../components/CameraOrUploadInput';
 import {
-  Upload, CheckCircle2, AlertTriangle, FileText, Star, Truck, ArrowRight, ShieldCheck
+  Upload, CheckCircle2, AlertTriangle, FileText, Star, Truck, ArrowRight, ShieldCheck, QrCode
 } from 'lucide-react';
 
 const OrderDetail = () => {
@@ -174,16 +174,25 @@ const OrderDetail = () => {
           </p>
         </div>
 
-        {order.invoice_url && (
-          <a
-            href={order.invoice_url}
-            target="_blank"
-            rel="noreferrer"
-            className="px-4 py-2 bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-emerald-900 shadow"
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to={`/traceability/order/${order.id}`}
+            className="px-4 py-2 bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-emerald-100 transition shadow-sm"
           >
-            <FileText className="w-4 h-4" /> Download Official Invoice PDF
-          </a>
-        )}
+            <QrCode className="w-4 h-4 text-emerald-700" /> View QR Traceability Passport
+          </Link>
+
+          {order.invoice_url && (
+            <a
+              href={order.invoice_url}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-emerald-900 shadow"
+            >
+              <FileText className="w-4 h-4" /> Download Official Invoice PDF
+            </a>
+          )}
+        </div>
       </div>
 
       {/* CENTREPIECE: SIDE-BY-SIDE FARM VS DELIVERY GRADE COMPARISON */}
