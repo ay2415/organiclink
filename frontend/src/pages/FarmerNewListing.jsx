@@ -248,8 +248,8 @@ const FarmerNewListing = () => {
 
             <div className="sm:col-span-3 bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 flex items-center justify-between mt-2">
               <div>
-                <span className="font-bold text-emerald-950 text-xs block">Bulk / Multiple Items Mode (YOLOv8 Two-Stage Pipeline)</span>
-                <span className="text-[11px] text-emerald-700 block">Check this if your photo contains a batch/tray of multiple items. Items are localized with YOLO and graded individually.</span>
+                <span className="font-bold text-emerald-950 text-xs block">Multi-Item / Tray Cluster Mode (YOLOv8 Two-Stage Pipeline)</span>
+                <span className="text-[11px] text-emerald-700 block">Enable when items are close together in a tray, crate, or cluster where standard mode struggles with overlapping shadows. YOLO localizes each item and grades them individually.</span>
               </div>
               <input
                 type="checkbox"
