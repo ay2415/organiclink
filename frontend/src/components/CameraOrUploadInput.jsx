@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, X, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Camera, Upload, X, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function CameraOrUploadInput({
   onFileSelected,
   previewUrl = null,
+  currentPreview = null,
   label = "Upload or Snap Produce Photo",
   accept = "image/*",
   id = "camera-or-upload-input",
@@ -17,6 +18,7 @@ export default function CameraOrUploadInput({
   
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
+  const directCameraInputRef = useRef(null);
 
   // Stop camera stream when modal closes
   const stopCamera = () => {
@@ -29,6 +31,12 @@ export default function CameraOrUploadInput({
   const startCamera = async (mode = facingMode) => {
     stopCamera();
     setCameraError(null);
+
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setCameraError("Live browser camera stream is not supported in this browser. Use Direct Camera Snap instead.");
+      return;
+    }
+
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -37,10 +45,13 @@ export default function CameraOrUploadInput({
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play().catch(e => console.log('Camera video playback error:', e));
+        };
       }
     } catch (err) {
       console.error("Camera access error:", err);
-      setCameraError("Camera access denied or unavailable. Please use file upload.");
+      setCameraError("Camera access denied or unavailable. Please click 'Open Device Camera' or use file upload.");
     }
   };
 
@@ -92,24 +103,25 @@ export default function CameraOrUploadInput({
     }
   };
 
-  const activeDisplayUrl = capturedPreview || previewUrl;
+  const activeDisplayUrl = capturedPreview || currentPreview || previewUrl;
 
   return (
     <div className="space-y-3">
       {label && <label className="block text-sm font-semibold text-gray-700">{label}</label>}
 
-      {/* Concealed Produce Mitigation Tip */}
-      <div className="p-2.5 bg-amber-50/90 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium leading-relaxed">
-        <strong>💡 Multi-Angle Quality Tip:</strong> You can upload multiple photos or snap different angles (including items from the middle/bottom of the tray). OrganicLink evaluates all photos and enforces the lowest quality score to prevent hidden defect issues.
-      </div>
-
-      {/* Side-by-side Action Buttons */}
-      <div className="flex flex-wrap gap-3">
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-2.5">
         <button
           type="button"
           disabled={disabled}
-          onClick={() => setShowCameraModal(true)}
-          className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm transition-all disabled:opacity-50"
+          onClick={() => {
+            if (navigator?.mediaDevices?.getUserMedia) {
+              setShowCameraModal(true);
+            } else {
+              directCameraInputRef.current?.click();
+            }
+          }}
+          className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl shadow-sm transition-all disabled:opacity-50 text-xs sm:text-sm"
         >
           <Camera className="w-4 h-4" />
           <span>Snap Camera 📸</span>
@@ -119,13 +131,23 @@ export default function CameraOrUploadInput({
           type="button"
           disabled={disabled}
           onClick={() => fileInputRef.current?.click()}
-          className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-sm transition-all disabled:opacity-50"
+          className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-sm transition-all disabled:opacity-50 text-xs sm:text-sm"
         >
           <Upload className="w-4 h-4" />
           <span>Choose File 📁</span>
         </button>
 
-        {/* Hidden File Picker WITHOUT capture attribute to allow gallery selection */}
+        {/* Hidden Native Camera Input */}
+        <input
+          ref={directCameraInputRef}
+          type="file"
+          accept={accept}
+          capture="environment"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        {/* Hidden File Picker */}
         <input
           ref={fileInputRef}
           id={id}
@@ -171,12 +193,25 @@ export default function CameraOrUploadInput({
 
             <div className="relative bg-black aspect-video flex items-center justify-center">
               {cameraError ? (
-                <div className="text-center p-6 text-red-400 text-sm">{cameraError}</div>
+                <div className="text-center p-6 space-y-3">
+                  <div className="text-red-400 text-xs font-semibold">{cameraError}</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCameraModal(false);
+                      directCameraInputRef.current?.click();
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow inline-flex items-center gap-2"
+                  >
+                    <Camera className="w-4 h-4" /> Open Native Camera
+                  </button>
+                </div>
               ) : (
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
+                  muted
                   className="w-full h-full object-cover"
                 />
               )}

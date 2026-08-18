@@ -229,67 +229,111 @@ const ProductDetail = () => {
             </div>
 
             <div>
-              <label className="text-xs font-bold text-gray-700 block mb-2">Delivery / Collection Method</label>
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <button
-                  type="button"
-                  onClick={() => setDeliveryType('direct')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                    deliveryType === 'direct'
-                      ? 'bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm'
-                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  🚚 Direct Home Address
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDeliveryType('collection_point')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                    deliveryType === 'collection_point'
-                      ? 'bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm'
-                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  📍 Local City Hub Pickup
-                </button>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-gray-700">Delivery / Collection Method</label>
+                <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${
+                  orderQty < 10 
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                    : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                }`}>
+                  {orderQty < 10 ? '📦 < 10 kg: Local Drop-off / Collection Point' : '🚚 ≥ 10 kg: Delivery / Collection Available'}
+                </span>
               </div>
 
-              {deliveryType === 'direct' ? (
-                <div>
-                  <label className="text-xs font-bold text-gray-700 block mb-1">Local Address (Co. {farm?.county})</label>
-                  <input
-                    type="text"
-                    value={deliveryAddress}
-                    onChange={e=>setDeliveryAddress(e.target.value)}
-                    placeholder={`e.g. Grand Parade, ${farm?.town || farm?.county}`}
-                    className="w-full border p-2.5 rounded-lg text-xs font-semibold"
-                  />
+              {orderQty < 10 ? (
+                <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2 mb-3">
+                  <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-amber-700" />
+                    <span>Designated Local Drop-off / Collection Point</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-snug">
+                    For quantities under 10 kg, orders use local community collection points for eco-friendly consolidation.
+                  </p>
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-700 block mb-1">Pickup Location</label>
+                    <select
+                      value={collectionPoint}
+                      onChange={e => {
+                        setCollectionPoint(e.target.value);
+                        setDeliveryType('collection_point');
+                      }}
+                      className="w-full border p-2 rounded-lg text-xs font-bold text-emerald-900 bg-white"
+                    >
+                      {hubs.length > 0 ? (
+                        hubs.map(h => (
+                          <option key={h.id} value={h.name}>
+                            {h.name} ({h.town})
+                          </option>
+                        ))
+                      ) : (
+                        <option value={`Central ${farm?.county} Farmers Hub`}>
+                          Central {farm?.county} Farmers Market Drop-Off Point
+                        </option>
+                      )}
+                    </select>
+                  </div>
                 </div>
               ) : (
-                <div>
-                  <label className="text-xs font-bold text-gray-700 block mb-1">Select Common City Collection Point</label>
-                  <select
-                    value={collectionPoint}
-                    onChange={e=>setCollectionPoint(e.target.value)}
-                    className="w-full border p-2.5 rounded-lg text-xs font-bold text-emerald-900 bg-emerald-50/50"
-                  >
-                    {hubs.length > 0 ? (
-                      hubs.map(h => (
-                        <option key={h.id} value={h.name}>
-                          {h.name} ({h.town})
-                        </option>
-                      ))
-                    ) : (
-                      <option value={`Central ${farm?.county} Farmers Hub`}>
-                        Central {farm?.county} Farmers Market Drop-Off Point
-                      </option>
-                    )}
-                  </select>
-                  <span className="text-[10px] text-gray-500 block mt-1">
-                    Farmer drops off batch at hub. Ideal for individual 10-20kg buyers.
-                  </span>
+                <div className="space-y-3 mb-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryType('direct')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                        deliveryType === 'direct'
+                          ? 'bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      🚚 Direct Delivery
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryType('collection_point')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                        deliveryType === 'collection_point'
+                          ? 'bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      📍 Local Collection Point
+                    </button>
+                  </div>
+
+                  {deliveryType === 'direct' ? (
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 block mb-1">Delivery Address (Co. {farm?.county})</label>
+                      <input
+                        type="text"
+                        value={deliveryAddress}
+                        onChange={e => setDeliveryAddress(e.target.value)}
+                        placeholder={`e.g. Grand Parade, ${farm?.town || farm?.county}`}
+                        className="w-full border p-2.5 rounded-lg text-xs font-semibold"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 block mb-1">Select Collection Point</label>
+                      <select
+                        value={collectionPoint}
+                        onChange={e => setCollectionPoint(e.target.value)}
+                        className="w-full border p-2.5 rounded-lg text-xs font-bold text-emerald-900 bg-emerald-50/50"
+                      >
+                        {hubs.length > 0 ? (
+                          hubs.map(h => (
+                            <option key={h.id} value={h.name}>
+                              {h.name} ({h.town})
+                            </option>
+                          ))
+                        ) : (
+                          <option value={`Central ${farm?.county} Farmers Hub`}>
+                            Central {farm?.county} Farmers Market Drop-Off Point
+                          </option>
+                        )}
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
