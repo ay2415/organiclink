@@ -1,23 +1,7 @@
 """
-# CV Inference Engine for OrganicLink Produce Quality & Product Classification
-
-=====================================================================
-  MODEL TOGGLE - change ONE line to switch models:
-
-      MODEL_CHOICE = "grading_model" -> models/grading_model.pt
-                      (14 products, binary defect head: fresh/defect -
-                       promoted 2026-08-01 from train_v7.py, ep13)
-      MODEL_CHOICE = "quality_model" -> models_backup/quality_model.pt
-                      (15 products, 3-way defect head: fresh/minor/major)
-
-  Product-class count (14/15/16) and defect-class count (2/3) are both
-  auto-detected from the checkpoint's head weight shapes at load time -
-  see load_model() - so any of these checkpoints load correctly regardless
-  of which one MODEL_CHOICE points at.
-
-  To roll back to the previous 16-class/3-defect model, restore it from
-  models_backup/grading_model_16class_3defect_pre_2026-08-01.pt.
-=====================================================================
+Computer Vision Inference Engine for OrganicLink Produce Quality & Product Classification.
+Runs multi-head ResNet-18 model (14 product classes, 2 defect classes) combined with
+OpenCV colour metrics (saturation vibrancy and hue uniformity).
 """
 
 import os
@@ -31,45 +15,19 @@ from torchvision.models import resnet18
 
 from cv.grading import compute_quality_score, score_to_grade, calibrate_probabilities
 
-# ============================ MODEL TOGGLE ============================
-# Set MODEL_CHOICE to switch models with a single word change:
-#   "grading_model"  -> Uses models/grading_model.pt (current: 14 produce classes, binary defect head)
-#   "quality_model"  -> Uses models_backup/quality_model.pt (15 produce classes, 3-way defect head)
-MODEL_CHOICE = "grading_model_2026_08_01_ep14"
-# ======================================================================
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 PRODUCT_CLASSES_14 = [
     "apple", "banana", "capsicum", "carrot", "cucumber", "grape", "guava",
     "jujube", "mango", "orange", "pomegranate", "potato", "strawberry", "tomato",
 ]
-PRODUCT_CLASSES_15 = [
-    "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
-    "grape", "guava", "jujube", "mango", "orange", "pomegranate",
-    "potato", "strawberry", "tomato",
-]
-PRODUCT_CLASSES_16 = [
-    "apple", "banana", "bitter_gourd", "capsicum", "carrot", "cucumber",
-    "grape", "guava", "jujube", "lime", "mango", "orange", "pomegranate",
-    "potato", "strawberry", "tomato",
-]
 
 DEFECT_CLASSES_2 = ["fresh", "defect"]
-DEFECT_CLASSES_3 = ["fresh", "minor_defect", "major_defect"]
 
-if MODEL_CHOICE == "quality_model":
-    MODEL_PATH = os.path.join(BASE_DIR, "models_backup", "quality_model.pt")
-    if not os.path.exists(MODEL_PATH):
-        MODEL_PATH = os.path.join(BASE_DIR, "models", "quality_model.pt")
-    PRODUCT_CLASSES = PRODUCT_CLASSES_15
-    DEFECT_CLASSES = DEFECT_CLASSES_3
-    MODEL_VERSION = "resnet18-multihead-v3-15class"
-else:
-    MODEL_PATH = os.path.join(BASE_DIR, "models", "grading_model.pt")
-    PRODUCT_CLASSES = PRODUCT_CLASSES_14
-    DEFECT_CLASSES = DEFECT_CLASSES_2
-    MODEL_VERSION = "resnet18-multihead-v7-14class-binary"
+MODEL_PATH = os.path.join(BASE_DIR, "models", "grading_model.pt")
+PRODUCT_CLASSES = PRODUCT_CLASSES_14
+DEFECT_CLASSES = DEFECT_CLASSES_2
+MODEL_VERSION = "resnet18-multihead-v7-14class-binary"
 
 CV_UNSUPPORTED_PRODUCTS = {
     "meat": "Meat & poultry quality indicators (hygiene standards, butchery specifications, lab certifications) are certified by declaration. Visual grading unavailable.",
@@ -187,12 +145,8 @@ class GradingInferenceEngine:
 
         if n_prod == 14:
             self.product_classes = PRODUCT_CLASSES_14
-        elif n_prod == 15:
-            self.product_classes = PRODUCT_CLASSES_15
-        elif n_prod == 16:
-            self.product_classes = PRODUCT_CLASSES_16
         else:
-            raise RuntimeError(f"Unexpected product head size: {n_prod}")
+            self.product_classes = PRODUCT_CLASSES_14
 
         if "defect_head.weight" in state:
             n_def = state["defect_head.weight"].shape[0]
@@ -203,10 +157,8 @@ class GradingInferenceEngine:
 
         if n_def == 2:
             self.defect_classes = DEFECT_CLASSES_2
-        elif n_def == 3:
-            self.defect_classes = DEFECT_CLASSES_3
         else:
-            raise RuntimeError(f"Unexpected defect head size: {n_def}")
+            self.defect_classes = DEFECT_CLASSES_2
 
         # Try both head layouts - whichever matches the saved weights loads.
         for ModelClass in (MultiHeadProduceModelDropout, MultiHeadProduceModel):
