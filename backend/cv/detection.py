@@ -1,9 +1,8 @@
 """
-Fine-Tuned YOLOv8 Produce Detection Engine for OrganicLink Phase 1.
+Fine-Tuned YOLOv8 Produce Detection Engine for OrganicLink.
 
 Runs detection using the fine-tuned produce detector model (cv/models/produce_detector.pt).
 Returns bounding boxes, class labels, and confidence scores.
-Saves annotated debug image to backend/cv/debug/detection_debug.jpg.
 """
 
 import os

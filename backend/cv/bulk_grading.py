@@ -1,5 +1,5 @@
 """
-Phase 2 — Two-Stage Bulk Produce Grading Engine for OrganicLink.
+Two-Stage Bulk Produce Grading Engine for OrganicLink.
 
 Pipeline Order: DETECT -> RECOGNIZE+MATCH -> GRADE -> AGGREGATE -> RIPENESS.
 """

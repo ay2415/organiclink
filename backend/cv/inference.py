@@ -184,7 +184,7 @@ class GradingInferenceEngine:
             self.model_available = False
 
     def extract_opencv_metrics(self, image_path):
-        # Auto-reload model weights if step2_train.py saved a newer checkpoint on disk
+        # Auto-reload model weights if checkpoint updated on disk
         if os.path.exists(MODEL_PATH):
             current_mtime = os.path.getmtime(MODEL_PATH)
             if current_mtime > self.last_mtime:
