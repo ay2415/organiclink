@@ -5,7 +5,10 @@ __pycache__/
 venv/
 .venv/
 *.sqlite3
-*.db
+test_*.db
+
+# Archived & Unused Files Folder
+unused_files/
 
 # Large Datasets & Media Artifacts (Do NOT push to GitHub)
 backend/cv/Fruit And Vegetable Diseases Dataset/
@@ -15,10 +18,6 @@ backend/cv/data/
 backend/uploads/
 backend/cv/data.zip
 *.onnx
-
-# Exception for models_backup folder
-!backend/cv/models_backup/
-!backend/cv/models_backup/*.pt
 
 # Node & Frontend
 node_modules/
