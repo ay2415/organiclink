@@ -1,6 +1,12 @@
 """
-Geocoding and Haversine Distance service for OrganicLink.
-Offline geocoding using seed/irish_locations.py.
+Geocoding and Haversine Distance Service for OrganicLink.
+
+Provides regional aggregation distance computation and offline Eircode / town lookup.
+Computes great-circle distances across the Irish geographic coordinates matrix.
+
+References:
+- Sinnott, R. W. (1984). Virtues of the Haversine. Sky and Telescope, 68(2), 159.
+- Department of Communications, Energy and Natural Resources (2015). Eircode System and Routing Key Matrix.
 """
 
 import math
@@ -10,9 +16,9 @@ from seed.irish_locations import IRISH_LOCATIONS, DEFAULT_LOCATION
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculates the great-circle distance between two points in kilometers
-    using the Haversine formula.
+    using the Haversine formula (Sinnott, 1984).
     """
-    R = 6371.0 # Earth radius in kilometers
+    R = 6371.0 # WGS84 volumetric mean Earth radius in kilometers
 
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
@@ -27,8 +33,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 def geocode_irish_location(eircode: str = None, town: str = None) -> tuple[float, float]:
     """
-    Derives (latitude, longitude) from eircode or town.
-    Checks eircode routing key first (e.g. 'T12' from 'T12 AB34'), then falls back to town.
+    Derives (latitude, longitude) from Eircode routing key or Irish town name.
+    Checks Eircode routing key prefix first (e.g. 'T12' from 'T12 AB34'), then falls back to town match.
     """
     # 1. Try Eircode routing key (first 3 chars)
     if eircode:
@@ -37,16 +43,16 @@ def geocode_irish_location(eircode: str = None, town: str = None) -> tuple[float
         if routing_key in IRISH_LOCATIONS:
             return IRISH_LOCATIONS[routing_key]
 
-    # 2. Try town name
+    # 2. Try town name lookup
     if town:
         clean_town = town.strip().lower()
         if clean_town in IRISH_LOCATIONS:
             return IRISH_LOCATIONS[clean_town]
         
-        # Substring match fallback
+        # Substring fuzzy match fallback
         for name, coords in IRISH_LOCATIONS.items():
             if len(name) > 3 and name in clean_town:
                 return coords
 
-    # Default fallback
+    # Fallback to central Irish reference point (Athlone/Midlands)
     return DEFAULT_LOCATION
