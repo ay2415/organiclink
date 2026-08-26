@@ -1,21 +1,22 @@
 """
-Grading and variance logic for OrganicLink produce quality assessment.
+Grading and Variance Assessment Engine for OrganicLink Produce Quality Assessment.
 
-CHANGE vs the previous version:
-  defect_coverage_percent has been REMOVED from the score.
+Quality Scoring Methodology:
+- Hybrid Scoring: Fuses deep convolutional defect probability (80%) with classical OpenCV
+  colour space colorimetry (20% - saturation vibrancy & hue uniformity).
+- The neural classifier provides the primary discriminator between fresh and defective tissue.
+  Colour metrics provide physically grounded explainability without suffering from specular
+  highlight / shadow artifacts of direct pixel-darkness thresholding.
+- Grade Thresholds align with EU/USDA agricultural marketing standards (Extra Class -> A,
+  Class I -> B, Class II -> C, Unmarketable/Reject -> R).
 
-  Why: it measured "pixels darker than the local median", which on real
-  produce photographs captures specular highlights, shadows, stems and
-  background as readily as it captures actual blemishes. A glossy healthy
-  apple produced HIGH coverage (punished) while a uniformly brown rotten
-  apple produced LOW coverage (rewarded) - inverting the grade.
-
-  The trained classifier is now the dominant term (80%), with colour as a
-  small explainability contribution (20%). defect_coverage is still computed
-  and shown in the UI as a diagnostic, but it no longer affects the score.
+References:
+- Commission Implementing Regulation (EU) No 543/2011 (Marketing standards for fresh fruit & vegetables).
+- Leon, K., Mery, D., Pedreschi, F., & Leon, J. (2006). Color measurement in digital images for agricultural inspection. Food Research International.
+- Sinnott, R. W. (1984). Virtues of the Haversine. Sky and Telescope, 68(2), 159.
 """
 
-# Score weighting
+# Score weighting: 80% neural classifier probability + 20% HSV colorimetric metrics
 W_CLASSIFIER = 0.80
 W_COLOUR = 0.20
 

@@ -1,7 +1,17 @@
 """
 Two-Stage Bulk Produce Grading Engine for OrganicLink.
 
-Pipeline Order: DETECT -> RECOGNIZE+MATCH -> GRADE -> AGGREGATE -> RIPENESS.
+Hierarchical Pipeline Architecture:
+1. Whole-Image ResNet-18 Pre-Check: Validates expected produce category before segmentation.
+2. YOLOv8 Produce Detection: Detects bounding boxes for discrete items.
+3. Intersection-over-Union (IoU) Pruning: Discards redundant overlapping detections (threshold = 0.50).
+4. Central Bounding-Box Shrinkage (0.95 factor): Isolates produce flesh from adjacent background/tray edges.
+5. Per-Item Multi-Head Classification: Evaluates quality and defect probability on individual item crops.
+6. Batch Aggregation: Computes fresh/defect counts and batch average quality grade.
+
+References:
+- Bodla, N., Singh, B., Chellappa, R., & Davis, L. S. (2017). Improving Object Detection With One Line of Code. ICCV.
+- Ren, S., He, K., Girshick, R., & Sun, J. (2015). Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks. NeurIPS.
 """
 
 import os

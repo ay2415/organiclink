@@ -1,7 +1,17 @@
 """
 Computer Vision Inference Engine for OrganicLink Produce Quality & Product Classification.
-Runs multi-head ResNet-18 model (14 product classes, 2 defect classes) combined with
-OpenCV colour metrics (saturation vibrancy and hue uniformity).
+
+Architecture:
+- Shared Feature Extractor: ResNet-18 backbone (He et al., 2016, CVPR) pre-trained on ImageNet-1k.
+- Multi-Task Dual Output Heads:
+    1. Product Classification Head: 14 agricultural produce species.
+    2. Quality/Defect Head: Binary classification (fresh vs defective).
+- Hybrid Quality Blending: Fuses deep neural representations (80%) with classical OpenCV HSV
+  colour metrics (20% - saturation vibrancy & hue uniformity) for explainable grading.
+
+References:
+- He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep Residual Learning for Image Recognition. CVPR.
+- Caruana, R. (1997). Multitask Learning. Machine Learning, 28(1), 41-75.
 """
 
 import os

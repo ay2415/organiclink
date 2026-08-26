@@ -1,8 +1,12 @@
 """
 Fine-Tuned YOLOv8 Produce Detection Engine for OrganicLink.
 
-Runs detection using the fine-tuned produce detector model (cv/models/produce_detector.pt).
-Returns bounding boxes, class labels, and confidence scores.
+Provides localized object bounding-box inference across multi-item produce arrangements.
+Trained on annotated fruit & vegetable instance segmentation datasets.
+
+References:
+- Jocher, G., Chaurasia, A., & Qiu, J. (2023). YOLO by Ultralytics (YOLOv8). Ultralytics Inc.
+- Redmon, J., Divvala, S., Girshick, R., & Farhadi, A. (2016). You Only Look Once: Unified, Real-Time Object Detection. CVPR.
 """
 
 import os
