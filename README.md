@@ -13,7 +13,7 @@
 * **Full Title**: OrganicLink: A Computer-Vision Marketplace for Irish Organic Producers with Automated Produce Quality Grading
 * **Author**: Aashrith Sai Yamsani (Student ID: 25287419)
 * **Degree**: MEng in Computer Vision and Artificial Intelligence
-* **Module**: CE6013 Digital Futures Project
+* **Module**: LK489  Master of Engineering in Computer Vision and Artificial Intelligence Master's Project
 * **Institution**: University of Limerick
 * **Supervisors**: Dr. Elfed Lewis (CE6013), Dr. Annmarie Ryan (Digital Futures Lab)
 
