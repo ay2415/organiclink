@@ -53,15 +53,17 @@ app = FastAPI(
     title="OrganicLink API",
     description="OrganicLink: A Computer-Vision Marketplace for Irish Organic Producers with Automated Produce Quality Grading",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
     lifespan=lifespan
 )
 
-# CORS configuration
+# Dynamic CORS configuration
+origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    allow_origins=origins if origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -99,5 +101,6 @@ def health_check():
         "status": "online",
         "app": "OrganicLink API",
         "version": "1.0.0",
+        "environment": settings.ENVIRONMENT,
         "variance_tolerance_percent": settings.VARIANCE_TOLERANCE_PERCENT
     }

@@ -6,10 +6,14 @@ DEFAULT_DB_PATH = os.path.join(BASE_DIR, "organiclink.db").replace("\\", "/")
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "OrganicLink"
+    ENVIRONMENT: str = "production"
     DATABASE_URL: str = f"sqlite:///{DEFAULT_DB_PATH}"
     SECRET_KEY: str = "organiclink-secret-key-change-in-production-2026-irish-organic"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    
+    # CORS Origin Whitelist (comma-separated strings)
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost:5174"
     
     # Platform business settings
     VARIANCE_TOLERANCE_PERCENT: float = 10.0
