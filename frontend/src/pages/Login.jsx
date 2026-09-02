@@ -1,37 +1,37 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Leaf, LogIn } from 'lucide-react';
+import { Leaf, LogIn, KeyRound } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       const u = await login(email, password);
       if (u.role === 'farmer') navigate('/farmer/dashboard');
       else if (u.role === 'admin') navigate('/admin');
       else navigate('/marketplace');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please check credentials.');
+      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDemoLogin = async (demoEmail) => {
-    try {
-      const u = await login(demoEmail, demoEmail.includes('admin') ? 'Admin123!' : 'Password123!');
-      if (u.role === 'farmer') navigate('/farmer/dashboard');
-      else if (u.role === 'admin') navigate('/admin');
-      else navigate('/marketplace');
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Demo login failed');
-    }
+  // Pre-fill form credentials on click so the user can inspect and submit manually
+  const handleFillDemo = (demoEmail, demoPass) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setError('');
   };
 
   return (
@@ -58,7 +58,7 @@ const Login = () => {
               type="email"
               required
               className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-              placeholder="e.g. farmer@corkorganic.ie"
+              placeholder="e.g. farmer.cork1@organiclink.ie"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -78,35 +78,41 @@ const Login = () => {
 
           <button
             type="submit"
-            className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+            disabled={loading}
+            className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
           >
-            <LogIn className="w-4 h-4" /> Sign In
+            <LogIn className="w-4 h-4" /> {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
 
         <div className="border-t border-gray-200 pt-6">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center mb-3">Quick Demo Logins</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center mb-3">
+            Fill Demo Credentials
+          </p>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <button
-              onClick={() => handleDemoLogin('farmer@corkorganic.ie')}
+              type="button"
+              onClick={() => handleFillDemo('farmer.cork1@organiclink.ie', 'Password123!')}
               className="p-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold rounded-md text-left transition-colors border border-emerald-200"
             >
-              <div className="font-bold">Cork Onion Farmer</div>
-              <div className="text-[10px] text-emerald-600">20kg Surplus Suggestion</div>
+              <div className="font-bold flex items-center gap-1"><KeyRound className="w-3 h-3" /> Farmer (Produce)</div>
+              <div className="text-[10px] text-emerald-600">farmer.cork1@organiclink.ie</div>
             </button>
             <button
-              onClick={() => handleDemoLogin('rest1@bistro.ie')}
+              type="button"
+              onClick={() => handleFillDemo('retail.cork1@organiclink.ie', 'Password123!')}
               className="p-2 bg-blue-50 text-blue-800 hover:bg-blue-100 font-semibold rounded-md text-left transition-colors border border-blue-200"
             >
-              <div className="font-bold">Bistro Buyer</div>
-              <div className="text-[10px] text-blue-600">Restaurant Role</div>
+              <div className="font-bold flex items-center gap-1"><KeyRound className="w-3 h-3" /> Retailer Buyer</div>
+              <div className="text-[10px] text-blue-600">retail.cork1@organiclink.ie</div>
             </button>
             <button
-              onClick={() => handleDemoLogin('admin@organiclink.ie')}
+              type="button"
+              onClick={() => handleFillDemo('admin@organiclink.ie', 'Admin123!')}
               className="p-2 bg-amber-50 text-amber-900 hover:bg-amber-100 font-semibold rounded-md text-left transition-colors border border-amber-200 col-span-2 text-center"
             >
-              <div className="font-bold">System Admin Portal</div>
-              <div className="text-[10px] text-amber-700">Dispute Queue & Audit Logs</div>
+              <div className="font-bold flex items-center justify-center gap-1"><KeyRound className="w-3 h-3" /> System Admin</div>
+              <div className="text-[10px] text-amber-700">admin@organiclink.ie</div>
             </button>
           </div>
         </div>
