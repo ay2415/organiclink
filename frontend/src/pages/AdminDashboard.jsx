@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 import GradeBadge from '../components/GradeBadge';
 import {
-  Shield, AlertTriangle, CheckCircle2, FileText, Settings, Activity, Gavel
+  Shield, AlertTriangle, CheckCircle2, FileText, Settings, Activity, Gavel, XCircle, Check
 } from 'lucide-react';
 
 const AdminDashboard = () => {
@@ -20,10 +20,16 @@ const AdminDashboard = () => {
   });
 
   const [resolutionState, setResolutionState] = useState({});
+  const [actionSuccess, setActionSuccess] = useState('');
 
   useEffect(() => {
     fetchAdminData();
   }, []);
+
+  const showNotification = (msg) => {
+    setActionSuccess(msg);
+    setTimeout(() => setActionSuccess(''), 4000);
+  };
 
   const fetchAdminData = async () => {
     try {
@@ -48,10 +54,11 @@ const AdminDashboard = () => {
 
   const handleVerifyFarm = async (farmId, verified) => {
     try {
-      await api.put(`/api/admin/farms/${farmId}/verify`, { verified, note: 'Admin verified certification' });
+      await api.put(`/api/admin/farms/${farmId}/verify`, { verified, note: verified ? 'Admin approved certification' : 'Admin rejected certification' });
+      showNotification(verified ? 'Farm verified and approved successfully' : 'Farm registration rejected');
       fetchAdminData();
     } catch (err) {
-      alert('Error verifying farm');
+      alert('Error updating farm verification status');
     }
   };
 
@@ -59,9 +66,23 @@ const AdminDashboard = () => {
     const resState = resolutionState[orderId] || { resolution: 'partial_payment', rationale: 'Resolved by admin evaluation', partial_percent: 50.0 };
     try {
       await api.put(`/api/admin/disputes/${orderId}/resolve`, resState);
+      showNotification('Dispute verdict executed successfully');
       fetchAdminData();
     } catch (err) {
       alert(err.response?.data?.detail || 'Error resolving dispute');
+    }
+  };
+
+  const handleDismissDispute = async (orderId) => {
+    if (!window.confirm('Are you sure you want to dismiss this dispute? This will unflag the order and release payment.')) {
+      return;
+    }
+    try {
+      await api.put(`/api/admin/disputes/${orderId}/dismiss`);
+      showNotification(`Dispute for Order #${orderId.substring(0, 8)} dismissed successfully`);
+      fetchAdminData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Error dismissing dispute');
     }
   };
 
@@ -69,7 +90,7 @@ const AdminDashboard = () => {
     e.preventDefault();
     try {
       await api.put('/api/admin/settings', adminSettings);
-      alert('Admin settings saved successfully');
+      showNotification('System platform settings saved successfully');
       fetchAdminData();
     } catch (err) {
       alert('Error saving admin settings');
@@ -88,6 +109,14 @@ const AdminDashboard = () => {
           <p className="text-xs text-amber-200">System governance, quality variance dispute arbitration, farm verification queue, and immutable audit logs</p>
         </div>
       </div>
+
+      {/* Success Toast */}
+      {actionSuccess && (
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-bold shadow-sm animate-fade-in">
+          <Check className="w-4 h-4 text-emerald-600" />
+          {actionSuccess}
+        </div>
+      )}
 
       {/* Metrics Row */}
       {metrics && (
@@ -119,25 +148,25 @@ const AdminDashboard = () => {
       <div className="flex border-b border-gray-200 text-xs font-bold space-x-6">
         <button
           onClick={() => setActiveTab('disputes')}
-          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'disputes' ? 'border-amber-600 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'disputes' ? 'border-amber-600 text-amber-700 font-extrabold' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
         >
           <Gavel className="w-4 h-4" /> Dispute Arbitration Queue ({disputes.length})
         </button>
         <button
           onClick={() => setActiveTab('farms')}
-          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'farms' ? 'border-amber-600 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'farms' ? 'border-amber-600 text-amber-700 font-extrabold' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
         >
           <CheckCircle2 className="w-4 h-4" /> Unverified Farms ({farmsQueue.length})
         </button>
         <button
           onClick={() => setActiveTab('audit')}
-          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'audit' ? 'border-amber-600 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'audit' ? 'border-amber-600 text-amber-700 font-extrabold' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
         >
           <Activity className="w-4 h-4" /> Immutable Audit Log
         </button>
         <button
           onClick={() => setActiveTab('settings')}
-          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'settings' ? 'border-amber-600 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          className={`pb-3 border-b-2 flex items-center gap-1.5 ${activeTab === 'settings' ? 'border-amber-600 text-amber-700 font-extrabold' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
         >
           <Settings className="w-4 h-4" /> Platform Settings
         </button>
@@ -147,8 +176,10 @@ const AdminDashboard = () => {
       {activeTab === 'disputes' && (
         <div className="space-y-6">
           {disputes.length === 0 ? (
-            <div className="p-8 text-center bg-white rounded-2xl border text-gray-500 text-xs">
-              No open quality disputes in queue. All quality variances are within tolerance!
+            <div className="p-12 text-center bg-white rounded-3xl border border-gray-200 text-gray-500 text-sm shadow-sm">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
+              <div className="font-bold text-gray-800">No open quality disputes in queue</div>
+              <div className="text-xs text-gray-500 mt-1">All produce deliveries and transit variances are operating within acceptable thresholds.</div>
             </div>
           ) : (
             disputes.map((d) => (
@@ -165,8 +196,17 @@ const AdminDashboard = () => {
                       Farmer: <span className="font-bold text-gray-800">{d.farmer?.name}</span> | Buyer: <span className="font-bold text-gray-800">{d.buyer?.name}</span> ({d.buyer?.role}) | Total: <span className="font-extrabold text-emerald-800">€{d.total_price.toFixed(2)}</span>
                     </p>
                   </div>
-                  <div className="bg-red-50 text-red-900 text-xs font-bold px-3 py-2 rounded-xl border border-red-200">
-                    Payment Held in Escrow
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDismissDispute(d.order_id)}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-300 transition-colors flex items-center gap-1.5 shadow-sm"
+                      title="Dismiss this dispute flag and release payment"
+                    >
+                      <XCircle className="w-3.5 h-3.5 text-gray-500" /> Dismiss Dispute
+                    </button>
+                    <div className="bg-red-50 text-red-900 text-xs font-bold px-3 py-1.5 rounded-xl border border-red-200">
+                      Payment Held (Simulated)
+                    </div>
                   </div>
                 </div>
 
@@ -212,6 +252,7 @@ const AdminDashboard = () => {
                         <option value="partial_payment">Partial Payment (Split Risk)</option>
                         <option value="full_payment">Full Payment to Farmer (Quality Maintained)</option>
                         <option value="refund_buyer">Full Refund to Buyer (Quality Defective)</option>
+                        <option value="dismiss">Dismiss Dispute (Overrule Variance Flag)</option>
                       </select>
                     </div>
 
@@ -239,12 +280,20 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleResolveDispute(d.order_id)}
-                    className="px-6 py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-extrabold text-xs rounded-xl shadow transition-all"
-                  >
-                    Execute Binding Dispute Resolution
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={() => handleResolveDispute(d.order_id)}
+                      className="px-6 py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-extrabold text-xs rounded-xl shadow transition-all"
+                    >
+                      Execute Binding Dispute Resolution
+                    </button>
+                    <button
+                      onClick={() => handleDismissDispute(d.order_id)}
+                      className="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 font-bold text-xs rounded-xl border border-gray-300 shadow-sm transition-all"
+                    >
+                      Dismiss Flag (No Action Required)
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -265,37 +314,45 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {farmsQueue.map((f) => (
-                <tr key={f.id} className="hover:bg-gray-50">
-                  <td className="p-3 font-bold text-gray-900">{f.farm_name}</td>
-                  <td className="p-3">{f.town}, Co. {f.county}</td>
-                  <td className="p-3">
-                    <div className="font-semibold text-emerald-800">{f.organic_cert_body || 'Organic Cert'} ({f.organic_cert_number || 'N/A'})</div>
-                    {f.cert_doc_url ? (
-                      <a
-                        href={f.cert_doc_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-bold underline mt-1"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> View Uploaded Certificate
-                      </a>
-                    ) : (
-                      <span className="text-[11px] text-gray-400 italic">No document uploaded</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <button onClick={()=>handleVerifyFarm(f.id, true)} className="px-3 py-1 bg-emerald-700 text-white font-bold rounded text-xs hover:bg-emerald-800">
-                        Approve
-                      </button>
-                      <button onClick={()=>handleVerifyFarm(f.id, false)} className="px-3 py-1 bg-rose-700 text-white font-bold rounded text-xs hover:bg-rose-800">
-                        Reject
-                      </button>
-                    </div>
+              {farmsQueue.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-gray-500 italic">
+                    No unverified farm applications pending review.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                farmsQueue.map((f) => (
+                  <tr key={f.id} className="hover:bg-gray-50">
+                    <td className="p-3 font-bold text-gray-900">{f.farm_name}</td>
+                    <td className="p-3">{f.town}, Co. {f.county}</td>
+                    <td className="p-3">
+                      <div className="font-semibold text-emerald-800">{f.organic_cert_body || 'Organic Cert'} ({f.organic_cert_number || 'N/A'})</div>
+                      {f.cert_doc_url ? (
+                        <a
+                          href={f.cert_doc_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-bold underline mt-1"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> View Uploaded Certificate
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-gray-400 italic">No document uploaded</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <button onClick={()=>handleVerifyFarm(f.id, true)} className="px-3 py-1.5 bg-emerald-700 text-white font-bold rounded-lg text-xs hover:bg-emerald-800 shadow-sm transition-all">
+                          Approve
+                        </button>
+                        <button onClick={()=>handleVerifyFarm(f.id, false)} className="px-3 py-1.5 bg-rose-700 text-white font-bold rounded-lg text-xs hover:bg-rose-800 shadow-sm transition-all">
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

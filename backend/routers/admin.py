@@ -130,18 +130,22 @@ def resolve_dispute(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    valid_resolutions = ["full_payment", "partial_payment", "refund_buyer"]
+    valid_resolutions = ["full_payment", "partial_payment", "refund_buyer", "dismiss"]
     if resolve_in.resolution not in valid_resolutions:
         raise HTTPException(status_code=400, detail=f"Invalid resolution type. Must be one of {valid_resolutions}")
 
-    order.dispute_status = "resolved"
+    order.dispute_status = "resolved" if resolve_in.resolution != "dismiss" else "dismissed"
     order.dispute_resolution = resolve_in.resolution
     order.dispute_rationale = resolve_in.rationale
-    order.status = "paid" if resolve_in.resolution in ["full_payment", "partial_payment"] else "delivered"
+    if resolve_in.resolution == "dismiss":
+        order.dispute_flag = False
+        order.status = "paid"
+    else:
+        order.status = "paid" if resolve_in.resolution in ["full_payment", "partial_payment"] else "delivered"
 
     payment = db.query(Payment).filter(Payment.order_id == order.id).first()
     if payment:
-        if resolve_in.resolution == "full_payment":
+        if resolve_in.resolution in ["full_payment", "dismiss"]:
             payment.status = "paid"
             payment.paid_date = datetime.utcnow().date()
         elif resolve_in.resolution == "partial_payment":
@@ -155,7 +159,8 @@ def resolve_dispute(
     db.commit()
 
     log_audit_event(
-        db, action="dispute_resolved", actor_id=admin_user.id, actor_role="admin",
+        db, action="dispute_resolved" if resolve_in.resolution != "dismiss" else "dispute_dismissed",
+        actor_id=admin_user.id, actor_role="admin",
         order_id=order.id, details={"resolution": resolve_in.resolution, "rationale": resolve_in.rationale, "partial_percent": resolve_in.partial_percent}
     )
 
@@ -170,6 +175,45 @@ def resolve_dispute(
         "dispute_status": order.dispute_status,
         "payment_status": payment.status if payment else None
     }
+
+
+@router.put("/disputes/{order_id}/dismiss")
+def dismiss_dispute(
+    order_id: str,
+    admin_user: User = Depends(require_role(["admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin dismisses a flagged dispute.
+    Unflags the order, marks dispute as dismissed, and releases payment to farmer.
+    """
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.dispute_flag = False
+    order.dispute_status = "dismissed"
+    order.dispute_resolution = "dismissed"
+    order.dispute_rationale = "Dismissed by admin: quality verified within acceptable transit boundaries"
+    order.status = "paid"
+
+    payment = db.query(Payment).filter(Payment.order_id == order.id).first()
+    if payment:
+        payment.status = "paid"
+        payment.paid_date = datetime.utcnow().date()
+
+    db.commit()
+
+    log_audit_event(
+        db, action="dispute_dismissed", actor_id=admin_user.id, actor_role="admin",
+        order_id=order.id, details={"status": "dismissed"}
+    )
+
+    farm = db.query(Farm).filter(Farm.user_id == order.farmer_id).first()
+    if farm:
+        update_farm_reputation(db, farm.id)
+
+    return {"message": "Dispute dismissed successfully", "order_id": order.id, "status": "dismissed"}
 
 
 @router.get("/metrics")
