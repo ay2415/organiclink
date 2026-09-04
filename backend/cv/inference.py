@@ -91,6 +91,7 @@ class MultiHeadProduceModel(nn.Module):
         return self.product_head(features), self.defect_head(features)
 
 
+# Standard ImageNet preprocessing and tensor normalization
 class MultiHeadProduceModelDropout(nn.Module):
     """Head layout used by the NEW model (train.py v6 with Dropout)."""
     def __init__(self, num_products, num_defects):
