@@ -1,3 +1,4 @@
+# Schema definitions for produce quality inspection and variance tracking
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
