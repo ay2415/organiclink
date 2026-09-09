@@ -1,4 +1,4 @@
-version: "3.8"
+version: '3.8'
 
 services:
 
@@ -18,19 +18,19 @@ services:
     # IMPORTANT:
     # PostgreSQL is NOT exposed to the public Internet.
     # The backend communicates with PostgreSQL internally
-    # using the hostname "postgres".
+    # using the Docker network hostname "postgres".
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-organiclink} -d ${POSTGRES_DB:-organiclink_db}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-organiclink} -d ${POSTGRES_DB:-organiclink_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 10s
 
   # ============================================================
-  # Backend
+  # Backend (FastAPI / Uvicorn)
   # ============================================================
   backend:
     build:
@@ -40,33 +40,24 @@ services:
     container_name: organiclink_backend
     restart: always
 
-    # Backend runs on port 8000.
-    # Keep this temporarily exposed while testing.
-    # We can make it internal-only later when we configure
-    # the production reverse proxy.
-    ports:
-      - "8000:8000"
+    # Port 8000 is internal-only to Docker network.
+    # All client browser traffic enters through Nginx on Port 80.
+    expose:
+      - "8000"
 
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
-
       DATABASE_URL: postgresql://${POSTGRES_USER:-organiclink}:${POSTGRES_PASSWORD:-organiclink_secure_password_2026}@postgres:5432/${POSTGRES_DB:-organiclink_db}
-
-      SECRET_KEY: ${SECRET_KEY:-change_this_secret_key}
-
+      SECRET_KEY: ${SECRET_KEY:-organiclink_production_jwt_secret_key_change_me}
       ALGORITHM: ${ALGORITHM:-HS256}
-
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
-
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://localhost:80,http://localhost:5173}
-
       VARIANCE_TOLERANCE_PERCENT: ${VARIANCE_TOLERANCE_PERCENT:-10.0}
 
     volumes:
-      # Persistent uploaded images/files
+      # Persistent uploaded produce photos and generated PDF documents
       - uploads_data:/app/uploads
-
-      # ML/CV models included with the project
+      # Pretrained Computer Vision model weights (ResNet-18 & YOLOv8)
       - ./backend/cv/models:/app/cv/models
 
     depends_on:
@@ -74,7 +65,7 @@ services:
         condition: service_healthy
 
   # ============================================================
-  # Frontend
+  # Frontend (Nginx Reverse Proxy & React SPA)
   # ============================================================
   frontend:
     build:
@@ -84,8 +75,8 @@ services:
     container_name: organiclink_frontend
     restart: always
 
-    # Public website
-    # Azure VM port 80 -> Frontend container port 80
+    # Public web entrypoint
+    # Azure VM port 80 -> Frontend Nginx container port 80
     ports:
       - "80:80"
 
@@ -93,12 +84,8 @@ services:
       - backend
 
 # ==============================================================
-# Persistent Volumes
+# Persistent Named Volumes
 # ==============================================================
 volumes:
-
-  # PostgreSQL database data
   postgres_data:
-
-  # Uploaded OrganicLink files/images
   uploads_data:
