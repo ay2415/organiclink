@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Leaf, LogIn, KeyRound } from 'lucide-react';
+import { Leaf, LogIn } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -21,17 +21,10 @@ const Login = () => {
       else if (u.role === 'admin') navigate('/admin');
       else navigate('/marketplace');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.detail || 'Login failed. Please check your email and password.');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Pre-fill form credentials on click so the user can inspect and submit manually
-  const handleFillDemo = (demoEmail, demoPass) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setError('');
   };
 
   return (
@@ -42,7 +35,7 @@ const Login = () => {
             <Leaf className="w-8 h-8" />
           </div>
           <h2 className="text-3xl font-extrabold text-gray-900">Sign in to OrganicLink</h2>
-          <p className="mt-2 text-sm text-gray-600">Irish Organic Agricultural Marketplace & CV Quality Grading</p>
+          <p className="mt-2 text-sm text-gray-600">Irish Certified Organic Agricultural Marketplace</p>
         </div>
 
         {error && (
@@ -58,7 +51,7 @@ const Login = () => {
               type="email"
               required
               className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-              placeholder="e.g. farmer.cork1@organiclink.ie"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -81,43 +74,11 @@ const Login = () => {
             disabled={loading}
             className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
           >
-            <LogIn className="w-4 h-4" /> {loading ? 'Signing In...' : 'Sign In'}
+            <LogIn className="w-4 h-4" /> {loading ? 'Signing In...' : 'Log In'}
           </button>
         </form>
 
-        <div className="border-t border-gray-200 pt-6">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center mb-3">
-            Fill Demo Credentials
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => handleFillDemo('farmer.cork1@organiclink.ie', 'Password123!')}
-              className="p-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold rounded-md text-left transition-colors border border-emerald-200"
-            >
-              <div className="font-bold flex items-center gap-1"><KeyRound className="w-3 h-3" /> Farmer (Produce)</div>
-              <div className="text-[10px] text-emerald-600">farmer.cork1@organiclink.ie</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleFillDemo('retail.cork1@organiclink.ie', 'Password123!')}
-              className="p-2 bg-blue-50 text-blue-800 hover:bg-blue-100 font-semibold rounded-md text-left transition-colors border border-blue-200"
-            >
-              <div className="font-bold flex items-center gap-1"><KeyRound className="w-3 h-3" /> Retailer Buyer</div>
-              <div className="text-[10px] text-blue-600">retail.cork1@organiclink.ie</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleFillDemo('admin@organiclink.ie', 'Admin123!')}
-              className="p-2 bg-amber-50 text-amber-900 hover:bg-amber-100 font-semibold rounded-md text-left transition-colors border border-amber-200 col-span-2 text-center"
-            >
-              <div className="font-bold flex items-center justify-center gap-1"><KeyRound className="w-3 h-3" /> System Admin</div>
-              <div className="text-[10px] text-amber-700">admin@organiclink.ie</div>
-            </button>
-          </div>
-        </div>
-
-        <p className="text-center text-xs text-gray-600">
+        <p className="text-center text-xs text-gray-600 pt-4 border-t border-gray-100">
           Don't have an account?{' '}
           <Link to="/register" className="font-bold text-emerald-700 hover:underline">
             Register here

@@ -10,10 +10,14 @@ const Register = () => {
     password: '',
     role: 'farmer',
     name: '',
-    phone: ''
+    phone: '',
+    cert_body: 'Irish Organic Association',
+    cert_number: '',
+    expiry_date: ''
   });
   const [certFile, setCertFile] = useState(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -25,21 +29,41 @@ const Register = () => {
     e.preventDefault();
     setError('');
 
-    if (formData.role === 'farmer' && !certFile) {
-      setError('Organic Certificate upload is mandatory for Farmer registration. Please attach your certificate.');
-      return;
+    if (formData.role === 'farmer') {
+      if (!certFile) {
+        setError('Organic Certificate document upload is required for Farmer registration.');
+        return;
+      }
+      if (!formData.cert_number.trim()) {
+        setError('Please enter your official Organic Certificate / License Number.');
+        return;
+      }
+      if (!formData.expiry_date) {
+        setError('Please enter the certificate expiry date.');
+        return;
+      }
     }
 
+    setLoading(true);
     try {
-      const u = await register(formData);
+      const registerPayload = {
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        name: formData.name,
+        phone: formData.phone
+      };
+
+      const u = await register(registerPayload);
+
       if (u.role === 'farmer') {
         if (certFile) {
           try {
             const fd = new FormData();
             fd.append('file', certFile);
-            fd.append('cert_body', 'IOA');
-            fd.append('cert_number', 'IOA-REG-2026');
-            fd.append('expiry_date', '2027-12-31');
+            fd.append('cert_body', formData.cert_body);
+            fd.append('cert_number', formData.cert_number.trim());
+            fd.append('expiry_date', formData.expiry_date);
             await api.post('/api/profile/me/certificate', fd);
           } catch (certErr) {
             console.error('Post-registration cert upload error:', certErr);
@@ -50,7 +74,9 @@ const Register = () => {
         navigate('/marketplace');
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed.');
+      setError(err.response?.data?.detail || 'Registration failed. Please verify your details.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -81,11 +107,11 @@ const Register = () => {
               className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm font-semibold"
             >
               <option value="farmer">Organic Farmer</option>
-              <option value="consumer">Individual Consumer (1-5 kg/L)</option>
+              <option value="consumer">Individual Consumer</option>
               <option value="retailer">Retailer / Deli / Organic Shop</option>
               <option value="restaurant">Farm-to-Fork Restaurant</option>
               <option value="institution">School / Hospital / Canteen</option>
-              <option value="manufacturer">Processor / Aggregator (Contract Holder)</option>
+              <option value="manufacturer">Processor / Aggregator (Contract Buyer)</option>
             </select>
           </div>
 
@@ -109,7 +135,7 @@ const Register = () => {
               name="email"
               required
               className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm"
-              placeholder="e.g. sean@glenbegorganic.ie"
+              placeholder="name@example.com"
               value={formData.email}
               onChange={handleChange}
             />
@@ -133,42 +159,90 @@ const Register = () => {
               type="password"
               name="password"
               required
+              minLength={8}
               className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm"
-              placeholder="••••••••"
+              placeholder="•••••••• (Min. 8 characters)"
               value={formData.password}
               onChange={handleChange}
             />
           </div>
 
+          {/* Farmer Certification Gate Fields */}
           {formData.role === 'farmer' && (
-            <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl space-y-2">
-              <label className="block text-xs font-bold text-amber-900 uppercase flex items-center gap-1.5">
-                <FileText className="w-4 h-4 text-amber-700" /> Organic Certificate (PDF or Photo)
-              </label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => setCertFile(e.target.files[0])}
-                className="w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-amber-700 file:text-white hover:file:bg-amber-800 cursor-pointer"
-              />
-              <p className="text-[11px] text-amber-800 leading-tight">
-                Upload your official organic certificate for admin verification.
+            <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-200 space-y-3 mt-4">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-800" />
+                <span className="font-bold text-xs text-emerald-950 uppercase">Mandatory Organic Certification</span>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Certification Body</label>
+                <select
+                  name="cert_body"
+                  value={formData.cert_body}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-semibold"
+                >
+                  <option value="Irish Organic Association">Irish Organic Association (IOA)</option>
+                  <option value="Organic Trust">Organic Trust CLG</option>
+                  <option value="Global Organic Certification">Other Certified EU Body</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">License / Cert Number *</label>
+                <input
+                  type="text"
+                  name="cert_number"
+                  required
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-semibold"
+                  placeholder="e.g. IOA-10842"
+                  value={formData.cert_number}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Certificate Expiry Date *</label>
+                <input
+                  type="date"
+                  name="expiry_date"
+                  required
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs font-semibold"
+                  value={formData.expiry_date}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Upload Certificate Document (PDF/Image) *</label>
+                <input
+                  type="file"
+                  required
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={(e) => setCertFile(e.target.files[0])}
+                  className="w-full text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-700 file:text-white hover:file:bg-emerald-800 cursor-pointer"
+                />
+              </div>
+              <p className="text-[10px] text-emerald-800">
+                Farmers undergo administrative review before listings become publicly active.
               </p>
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+            disabled={loading}
+            className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 mt-4"
           >
-            <UserPlus className="w-4 h-4" /> Create Account
+            <UserPlus className="w-4 h-4" /> {loading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-600">
-          Already registered?{' '}
+        <p className="text-center text-xs text-gray-600 pt-4 border-t border-gray-100">
+          Already have an account?{' '}
           <Link to="/login" className="font-bold text-emerald-700 hover:underline">
-            Sign in
+            Sign in here
           </Link>
         </p>
       </div>
